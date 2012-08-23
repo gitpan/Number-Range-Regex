@@ -15,7 +15,7 @@ use base 'Exporter';
 @ISA    = qw( Exporter );
 @EXPORT = @EXPORT_OK = qw( regex_range );
 
-$VERSION = '0.01';
+$VERSION = '0.02';
 
 my $_init_opts = {};
 
@@ -92,11 +92,13 @@ sub regex_range {
     ($min, $max) = ($max, $min);
   }
 
-  return qr/0*$min/ if $min == $max;
+  my $zeroes_maybe = $opts->{no_leading_zeroes} ? '' : '0*';
 
   die "regex_range; min must be less than or equal to max" if $max < $min;
 
   die "TODO: support for negative values not yet implemented" if $min < 0;
+
+  return qr/$zeroes_maybe$min/ if $min == $max;
 
 #  $min-- unless $opts->{exclusive_min} || $opts->{exclusive};
 #  $max++ unless $opts->{exclusive_max} || $opts->{exclusive};
@@ -177,7 +179,7 @@ sub regex_range {
   }
 
   my $regex_str = join '|', @patterns;
-  return qr/0*(?:$regex_str)/;
+  return qr/$zeroes_maybe(?:$regex_str)/;
 
 }
 

@@ -2,7 +2,7 @@
 $|++;
 
 use strict;
-use Test::More tests => 1395;
+use Test::More tests => 1419;
 use lib "./blib/lib";
 
 use Number::Range::Regex qw ( regex_range );
@@ -130,6 +130,38 @@ ok("997" =~ /^$nine_ninety_seven_or_less$/);
 ok("998" !~ /^$nine_ninety_seven_or_less$/);
 ok("1000" !~ /^$nine_ninety_seven_or_less$/);
 ok("23456" !~ /^$nine_ninety_seven_or_less$/);
+
+# no_leading_zeroes tests
+$range = regex_range( 0, 0, {no_leading_zeroes => 0} );
+ok(0 =~ /^$range$/);
+ok("00" =~ /^$range$/);
+$range = regex_range( 0, 0, {no_leading_zeroes => 1} );
+ok(0 =~ /^$range$/);
+ok("00" !~ /^$range$/);
+$range = regex_range( 1, 1, {no_leading_zeroes => 0} );
+ok(1 =~ /^$range$/);
+ok("01" =~ /^$range$/);
+$range = regex_range( 1, 1, {no_leading_zeroes => 1} );
+ok(1 =~ /^$range$/);
+ok("01" !~ /^$range$/);
+$range = regex_range( 9, 10, {no_leading_zeroes => 0} );
+ok(8 !~ /^$range$/);
+ok("08" !~ /^$range$/);
+ok(9 =~ /^$range$/);
+ok("09" =~ /^$range$/);
+ok(10 =~ /^$range$/);
+ok("010" =~ /^$range$/);
+ok(11 !~ /^$range$/);
+ok("011" !~ /^$range$/);
+$range = regex_range( 9, 10, {no_leading_zeroes => 1} );
+ok(8 !~ /^$range$/);
+ok("08" !~ /^$range$/);
+ok(9 =~ /^$range$/);
+ok("09" !~ /^$range$/);
+ok(10 =~ /^$range$/);
+ok("010" !~ /^$range$/);
+ok(11 !~ /^$range$/);
+ok("011" !~ /^$range$/);
 
 
 $range = test_range_exhaustive(19825, 20120);
