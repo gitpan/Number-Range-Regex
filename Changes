@@ -1,5 +1,8 @@
 Revision history for Perl extension Number::Range::Regexp
 
+0.03  Tue Aug 28 04:21:52 2012
+   -  more exhaustive and informative test scripts
+
 0.02  Thu Aug 23 13:45:23 2012
    -  no_loading_zeroes option implemented
 

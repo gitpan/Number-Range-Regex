@@ -15,7 +15,7 @@ use base 'Exporter';
 @ISA    = qw( Exporter );
 @EXPORT = @EXPORT_OK = qw( regex_range );
 
-$VERSION = '0.02';
+$VERSION = '0.03';
 
 my $_init_opts = {};
 

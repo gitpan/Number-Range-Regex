@@ -2,6 +2,7 @@ Changes
 MANIFEST
 Makefile.PL
 lib/Number/Range/Regex.pm
+t/_nrr_test_util.pm
 t/01-load.t
 t/02-usage.t
 

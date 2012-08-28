@@ -2,7 +2,9 @@
 $|++;
 
 use strict;
-use Test::More tests => 1419;
+use Test::More tests => 208;
+use lib "./t";
+use _nrr_test_util;
 use lib "./blib/lib";
 
 use Number::Range::Regex qw ( regex_range );
@@ -133,49 +135,51 @@ ok("23456" !~ /^$nine_ninety_seven_or_less$/);
 
 # no_leading_zeroes tests
 $range = regex_range( 0, 0, {no_leading_zeroes => 0} );
+ok($range);
 ok(0 =~ /^$range$/);
 ok("00" =~ /^$range$/);
 $range = regex_range( 0, 0, {no_leading_zeroes => 1} );
+ok($range);
 ok(0 =~ /^$range$/);
 ok("00" !~ /^$range$/);
 $range = regex_range( 1, 1, {no_leading_zeroes => 0} );
+ok($range);
 ok(1 =~ /^$range$/);
 ok("01" =~ /^$range$/);
 $range = regex_range( 1, 1, {no_leading_zeroes => 1} );
+ok($range);
 ok(1 =~ /^$range$/);
 ok("01" !~ /^$range$/);
 $range = regex_range( 9, 10, {no_leading_zeroes => 0} );
-ok(8 !~ /^$range$/);
-ok("08" !~ /^$range$/);
+ok($range);
 ok(9 =~ /^$range$/);
 ok("09" =~ /^$range$/);
 ok(10 =~ /^$range$/);
 ok("010" =~ /^$range$/);
-ok(11 !~ /^$range$/);
-ok("011" !~ /^$range$/);
 $range = regex_range( 9, 10, {no_leading_zeroes => 1} );
-ok(8 !~ /^$range$/);
-ok("08" !~ /^$range$/);
+ok($range);
 ok(9 =~ /^$range$/);
 ok("09" !~ /^$range$/);
 ok(10 =~ /^$range$/);
 ok("010" !~ /^$range$/);
-ok(11 !~ /^$range$/);
-ok("011" !~ /^$range$/);
 
 
 $range = test_range_exhaustive(19825, 20120);
+ok($range);
 
-$range = test_range_partial(19825, 32101, [19800, 19911]);
-$range = test_range_partial(19825, 32101, [31990, 32200]);
-$range = test_range_random(19825, 32101, 100);
+#$range = test_range_partial(19825, 32101, [19800, 19911]);
+#$range = test_range_partial(19825, 32101, [31990, 32200]);
+$range = test_range_exhaustive(19825, 32101);
+ok($range);
 ok(0 !~ /^$range$/);
 ok(1982 !~ /^$range$/);
 ok(2000 !~ /^$range$/);
 ok(3000 !~ /^$range$/);
 ok(25000 =~ /^$range$/);
 
-$range = test_range_random(354, 13123, 100);
+#$range = test_range_random(354, 13123, 100);
+$range = test_range_exhaustive(354, 13123);
+ok($range);
 ok(0 !~ /^$range$/);
 ok(3 !~ /^$range$/);
 ok(35 !~ /^$range$/);
@@ -199,14 +203,15 @@ ok(13120 =~ /^$range$/);
 ok(13123 =~ /^$range$/);
 ok(131234 !~ /^$range$/);
 
-test_range_exhaustive(123, 129);
-test_range_exhaustive(103, 129);
-test_range_exhaustive(1234, 1239);
-test_range_exhaustive(1229, 1239);
-test_range_exhaustive(1129, 1239);
+ok(test_range_exhaustive(123, 129));
+ok(test_range_exhaustive(103, 129));
+ok(test_range_exhaustive(1234, 1239));
+ok(test_range_exhaustive(1229, 1239));
+ok(test_range_exhaustive(1129, 1239));
 
 # leading zero tests
 $range = test_range_exhaustive("07", 128);
+ok($range);
 ok(6 !~ /^$range$/);
 ok("06" !~ /^$range$/);
 ok("006" !~ /^$range$/);
@@ -224,6 +229,7 @@ ok("0700" !~ /^$range$/);
 ok("0800" !~ /^$range$/);
 
 $range = test_range_exhaustive(7, "0128");
+ok($range);
 ok(128 =~ /^$range$/);
 ok("0128" =~ /^$range$/);
 ok(129 !~ /^$range$/);
@@ -231,58 +237,63 @@ ok("0129" !~ /^$range$/);
 ok(130 !~ /^$range$/);
 ok("0130" !~ /^$range$/);
 
-sub test_range_random {
-  my($min, $max, $trials) = @_;
-  my $range = regex_range($min, $max);
-  ok($range);
-  my $spread = $max - $min;
-  ok(($min-1) !~ /^$range$/);
-  for(my $trial=0; $trial<$trials; $trial++) {
-    my $c = $min + int rand $spread * 1.5;
-    my $desired = ($c >= $min) && ($c <= $max);
-    my $actual  = "$c" =~ /^$range$/;
-    if( ($desired and $actual) or (!$desired && !$actual) ) {
-      ok(1);
-    } else {
-      warn "failed (random) test $c =~ /^$range$/\n";
-    }
-  }
-  ok(($max+1) !~ /^$range$/);
-  return $range;
-}
+# this fuller test mirrors the algorithm's internal workings
+$range = regex_range(345, 35123);
+ok($range);
+ok(344 !~ /^$range$/);
+ok("0344" !~ /^$range$/);
+ok(345 =~ /^$range$/);
+ok("0345" =~ /^$range$/);
+ok("00345" =~ /^$range$/);
+ok(349 =~ /^$range$/);
+ok("0349" =~ /^$range$/);
+ok("00349" =~ /^$range$/);
+ok(350 =~ /^$range$/);
+ok("0350" =~ /^$range$/);
+ok("00350" =~ /^$range$/);
+ok(399 =~ /^$range$/);
+ok("0399" =~ /^$range$/);
+ok("00399" =~ /^$range$/);
+ok(400 =~ /^$range$/);
+ok("0400" =~ /^$range$/);
+ok("00400" =~ /^$range$/);
+ok(999 =~ /^$range$/);
+ok("0999" =~ /^$range$/);
+ok("00999" =~ /^$range$/);
+ok(1000 =~ /^$range$/);
+ok("01000" =~ /^$range$/);
+ok(9999 =~ /^$range$/);
+ok("09999" =~ /^$range$/);
+ok(10000 =~ /^$range$/);
+ok(29999 =~ /^$range$/);
+ok(30000 =~ /^$range$/);
+ok(34999 =~ /^$range$/);
+ok(35000 =~ /^$range$/);
+ok(35099 =~ /^$range$/);
+ok(35100 =~ /^$range$/);
+ok(35119 =~ /^$range$/);
+ok(35120 =~ /^$range$/);
+ok(35123 =~ /^$range$/);
+ok(35124 !~ /^$range$/);
 
-sub test_range_partial {
-  my($min, $max, @tranges) = @_;
-  my $range = regex_range($min, $max);
-  ok($range);
-  foreach my $test (@tranges) { 
-    my ($tmin, $tmax) = ($test->[0], $test->[1]);
-    for(my $c=$tmin; $c<=$tmax; ++$c) {
-      my $desired = ($c >= $min) && ($c <= $max);
-      my $actual  = "$c" =~ /^$range$/;
-      if( ($desired and $actual) or (!$desired && !$actual) ) {
-        ok(1);
-      } else {
-        warn "failed (partial range) test $c =~ /^$range$/, min: $min, max: $max\n";
-      }
-    }
-  }
-  return $range;
+## do some random tests searching vainly for hard to find bugs
+my $MAX_INT = 65535;
+eval { require POSIX }; if($@) {
+  diag "POSIX::LONG_MAX unavailable, using a very conservative MAX_INT: $MAX_INT";
+} else {
+  $MAX_INT = POSIX::LONG_MAX();
 }
-
-sub test_range_exhaustive {
-  my($min, $max) = @_;
-  my $range = regex_range($min, $max);
-  ok($range);
-  ok(($min-1) !~ /^$range$/);
-  for(my $c=$min; $c<=$max; ++$c) {
-    if("$c" =~ /^$range$/) {
-      ok(1);
-    } else {
-      warn "failed (exhaustive) test $c =~ /^$range$/, min: $min, max: $max\n";
-    }
-  }
-  ok(($max+1) !~ /^$range$/);
-  return $range;
-}
+my ($end, $start);
+# test as large a spread as possible
+$end   = int rand $MAX_INT;
+$start = int rand $end;
+$range = test_range_random($start, $end, 1000, 1);
+ok($range);
+# test a spread that involves a lot of digit boundary crossings
+$end   = int rand $MAX_INT;
+my $log_end = log($end)/log(10);
+my $max_power = int($log_end / 2);
+$start = int rand($end/10**$max_power);
+$range = test_range_random($start, $end, 1000, 1);
+ok($range);
 
