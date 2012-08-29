@@ -15,9 +15,15 @@ use base 'Exporter';
 @ISA    = qw( Exporter );
 @EXPORT = @EXPORT_OK = qw( regex_range );
 
-$VERSION = '0.03';
+$VERSION = '0.04';
 
-my $_init_opts = {};
+my $default_opts = {
+  allow_wildcard    => 0,
+  autoswap          => 0,
+  no_leading_zeroes => 0,
+  comment           => 1,
+};
+my $init_opts;
 
 sub features {
   return { negative => 0 };
@@ -25,7 +31,10 @@ sub features {
 
 sub init {
   my ($self, %opts) = @_;
-  $_init_opts = { %opts };
+  $init_opts = $default_opts;
+  while (my ($key, $value) = each %opts) {
+    $init_opts->{$key} = $value;
+  }
 }
 
 # TODO: support for auto-swapping of min, max if necessary via an option (instead of die'ing)
@@ -39,12 +48,12 @@ sub regex_range {
   my $opts;
   if($passed_opts) {
     die "regex_range: too many arguments" unless ref $passed_opts eq 'HASH';
-    $opts = { %$_init_opts };
+    $opts = { %$init_opts };
     while (my ($key, $val) = each %$passed_opts) {
       $opts->{$key} = $val;
     }
   } else {
-    $opts = $_init_opts;
+    $opts = $init_opts;
   }
 
   #canonicalize min and max by removing leading zeroes unless the value is 0
@@ -179,7 +188,9 @@ sub regex_range {
   }
 
   my $regex_str = join '|', @patterns;
-  return qr/$zeroes_maybe(?:$regex_str)/;
+  my $optional_comment = $opts->{comment} ? "(?#Number::Range::Regex[$min..$max])" : '';
+warn "comment: $optional_comment";
+  return qr/$zeroes_maybe(?:$regex_str)$optional_comment/;
 
 }
 

@@ -2,7 +2,7 @@
 $|++;
 
 use strict;
-use Test::More tests => 208;
+use Test::More tests => 213;
 use lib "./t";
 use _nrr_test_util;
 use lib "./blib/lib";
@@ -32,6 +32,15 @@ ok(10 =~ /^$range$/);
 ok(11 =~ /^$range$/);
 ok(12 =~ /^$range$/);
 ok(13 !~ /^$range$/);
+
+my $range_uncommented = regex_range( 3, 59, { comment => 0 } );
+ok($range_uncommented);
+my $range_commented = regex_range( 3, 59, { comment => 1 } );
+ok($range_commented);
+
+ok($range_commented ne $range_uncommented);
+ok(length $range_commented > length $range_uncommented);
+ok($range_commented =~ /[?][#]/);
 
 # tests for regex_range(undef, undef) aka "wildcarding"
 eval { regex_range() }; ok($@); # must specify at least a min or a max

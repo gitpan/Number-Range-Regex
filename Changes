@@ -1,5 +1,8 @@
 Revision history for Perl extension Number::Range::Regexp
 
+0.04  Tue Aug 28 21:44:08 2012
+   -  auto-commenting implemented and enabled by default
+
 0.03  Tue Aug 28 04:21:52 2012
    -  more exhaustive and informative test scripts
 
@@ -7,5 +10,5 @@ Revision history for Perl extension Number::Range::Regexp
    -  no_loading_zeroes option implemented
 
 0.01  Thu Aug 23 11:27:39 2012
-	-  original version
+   -  original version
 
