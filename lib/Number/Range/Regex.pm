@@ -15,7 +15,7 @@ use base 'Exporter';
 @ISA    = qw( Exporter );
 @EXPORT = @EXPORT_OK = qw( regex_range );
 
-$VERSION = '0.04';
+$VERSION = '0.05';
 
 my $default_opts = {
   allow_wildcard    => 0,
@@ -189,7 +189,6 @@ sub regex_range {
 
   my $regex_str = join '|', @patterns;
   my $optional_comment = $opts->{comment} ? "(?#Number::Range::Regex[$min..$max])" : '';
-warn "comment: $optional_comment";
   return qr/$zeroes_maybe(?:$regex_str)$optional_comment/;
 
 }
