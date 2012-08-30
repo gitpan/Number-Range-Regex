@@ -15,7 +15,7 @@ use base 'Exporter';
 @ISA    = qw( Exporter );
 @EXPORT = @EXPORT_OK = qw( regex_range );
 
-$VERSION = '0.05';
+$VERSION = '0.06';
 
 my $default_opts = {
   allow_wildcard    => 0,
@@ -23,28 +23,33 @@ my $default_opts = {
   no_leading_zeroes => 0,
   comment           => 1,
 };
-my $init_opts;
+my $init_opts = $default_opts;
 
 sub features {
   return { negative => 0 };
 }
 
 sub init {
-  my ($self, %opts) = @_;
+  my ($self, @opts) = @_;
+
+  # vestigial limb: init( foo => "bar" ) == init( { foo => "bar" } );
+  my %opts = (@opts == 1) ? %{$opts[0]} :
+             (@opts % 2 == 0) ? @opts :
+             die 'usage: init( $options_ref )';
+
   $init_opts = $default_opts;
+  # override any values of init_opts that were passed to init
   while (my ($key, $value) = each %opts) {
     $init_opts->{$key} = $value;
   }
 }
-
-# TODO: support for auto-swapping of min, max if necessary via an option (instead of die'ing)
 
 # regex_range( $min, $max ); #undef = no limit, so. e.g.
 #   regex_range(3, undef) yields the equivalent of qr/[+]?[3-9]|\d+/;
 sub regex_range {
   my ($min, $max, $passed_opts) = @_;
 
-  # local options can override defaults from init()
+  # local options can override defaults from init(), but don't clobber $init_opts
   my $opts;
   if($passed_opts) {
     die "regex_range: too many arguments" unless ref $passed_opts eq 'HASH';

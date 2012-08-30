@@ -2,7 +2,7 @@
 $|++;
 
 use strict;
-use Test::More tests => 213;
+use Test::More tests => 225;
 use lib "./t";
 use _nrr_test_util;
 use lib "./blib/lib";
@@ -10,6 +10,40 @@ use lib "./blib/lib";
 use Number::Range::Regex qw ( regex_range );
 my $features = Number::Range::Regex::features();
 my $range;
+
+# test option management (via commenting option)
+$range = regex_range( 3, 4 );
+ok($range); # regex_range works before we call init()
+ok($range =~ /[?][#]/); # range has a comment by default (as per $default_opts)
+
+# call init(comment => 0) (legacy format, no hashref), make sure comments go away
+eval { Number::Range::Regex->init( comment => 0 ); };
+ok(!$@); # called init without dying
+$range = regex_range( 3, 4 );
+ok($range);
+ok($range !~ /[?][#]/); 
+$range = regex_range( 3, 4, {comment => 1} );
+ok($range);
+ok($range =~ /[?][#]/); 
+
+# call init( {comment => 1} ) (new format w/ hashref), check commenting
+eval { Number::Range::Regex->init( { comment => 1 } ); };
+ok(!$@); # called init without dying
+$range = regex_range( 3, 4 );
+ok($range);
+ok($range =~ /[?][#]/); 
+$range = regex_range( 3, 4, {comment => 0} );
+ok($range);
+ok($range !~ /[?][#]/); 
+
+# tests for explicit comment => 0 vs comment => 1 differences
+my $range_uncommented = regex_range( 3, 59, { comment => 0 } );
+ok($range_uncommented);
+my $range_commented = regex_range( 3, 59, { comment => 1 } );
+ok($range_commented);
+ok($range_commented ne $range_uncommented);
+ok(length $range_commented > length $range_uncommented);
+ok($range_commented =~ /[?][#]/);
 
 Number::Range::Regex->init( foo => "bar" );
 ok(1); #called init() without dying
@@ -32,15 +66,6 @@ ok(10 =~ /^$range$/);
 ok(11 =~ /^$range$/);
 ok(12 =~ /^$range$/);
 ok(13 !~ /^$range$/);
-
-my $range_uncommented = regex_range( 3, 59, { comment => 0 } );
-ok($range_uncommented);
-my $range_commented = regex_range( 3, 59, { comment => 1 } );
-ok($range_commented);
-
-ok($range_commented ne $range_uncommented);
-ok(length $range_commented > length $range_uncommented);
-ok($range_commented =~ /[?][#]/);
 
 # tests for regex_range(undef, undef) aka "wildcarding"
 eval { regex_range() }; ok($@); # must specify at least a min or a max
@@ -296,13 +321,13 @@ my ($end, $start);
 # test as large a spread as possible
 $end   = int rand $MAX_INT;
 $start = int rand $end;
-$range = test_range_random($start, $end, 1000, 1);
+$range = test_range_random($start, $end, 1000, 0);
 ok($range);
 # test a spread that involves a lot of digit boundary crossings
 $end   = int rand $MAX_INT;
 my $log_end = log($end)/log(10);
 my $max_power = int($log_end / 2);
 $start = int rand($end/10**$max_power);
-$range = test_range_random($start, $end, 1000, 1);
+$range = test_range_random($start, $end, 1000, 0);
 ok($range);
 

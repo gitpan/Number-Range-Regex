@@ -1,5 +1,8 @@
 Revision history for Perl extension Number::Range::Regexp
 
+0.06  Aug 29 19:44:29 2012
+   -  fix crash when regex_range() is called before init()
+
 0.05  Tue Aug 28 22:20:42 2012
    -  silence a debug warning that was left enabled by accident
 
