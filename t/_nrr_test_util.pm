@@ -4,7 +4,8 @@ $|++;
 use strict;
 
 sub test_range_random {
-  my($min, $max, $trials, $verbose) = @_;
+  my($min, $max, $trials, $verbose, $opts) = @_;
+  die "cannot randomly test infinite ranges"  if  !defined $min or !defined $max;
   my $range = regex_range($min, $max);
   return  unless  $range;
   my $spread = $max - $min;
@@ -31,15 +32,18 @@ sub test_range_random {
 }
 
 sub test_range_partial {
+  my $opts = ref($_[-1]) eq 'HASH' ? pop @_ : {};
   my($min, $max, @tranges) = @_;
   my $range = regex_range($min, $max);
   return  unless  $range;
-  return  if  ($min-1) =~ /^$range$/;
-  return  if  $min !~ /^$range$/;
+  return  if  defined $min && ($min-1) =~ /^$range$/;
+  return  if  defined $min && $min !~ /^$range$/;
   foreach my $test (@tranges) { 
     my ($tmin, $tmax) = ($test->[0], $test->[1]);
     for(my $c=$tmin; $c<=$tmax; ++$c) {
-      my $desired = ($c >= $min) && ($c <= $max);
+      my $desired = 1;
+      $desired = $desired && ($c >= $min)  if  defined $min;
+      $desired = $desired && ($c <= $max)  if  defined $max;
       my $actual  = "$c" =~ /^$range$/;
       unless( ($desired and $actual) or (!$desired && !$actual) ) {
         warn "failed (partial range) test $c =~ /^$range$/, min: $min, max: $max\n";
@@ -47,13 +51,14 @@ sub test_range_partial {
       }
     }
   }
-  return  if  $max !~ /^$range$/;
-  return  if  ($max+1) =~ /^$range$/;
+  return  if  defined $max && $max !~ /^$range$/;
+  return  if  defined $max && ($max+1) =~ /^$range$/;
   return $range; 
 }
 
 sub test_range_exhaustive {
-  my($min, $max) = @_;
+  my($min, $max, $opts) = @_;
+  die "cannot exhaustively test infinite ranges"  if  !defined $min or !defined $max;
   my $range = regex_range($min, $max);
   return  unless  $range;
   return  if  ($min-1) =~ /^$range$/;

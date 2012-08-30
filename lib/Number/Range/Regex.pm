@@ -15,13 +15,14 @@ use base 'Exporter';
 @ISA    = qw( Exporter );
 @EXPORT = @EXPORT_OK = qw( regex_range );
 
-$VERSION = '0.06';
+$VERSION = '0.07';
 
 my $default_opts = {
   allow_wildcard    => 0,
   autoswap          => 0,
   no_leading_zeroes => 0,
   comment           => 1,
+  readable          => 0,
 };
 my $init_opts = $default_opts;
 
@@ -48,6 +49,7 @@ sub init {
 #   regex_range(3, undef) yields the equivalent of qr/[+]?[3-9]|\d+/;
 sub regex_range {
   my ($min, $max, $passed_opts) = @_;
+  my ($passed_min, $passed_max) = ($min, $max);
 
   # local options can override defaults from init(), but don't clobber $init_opts
   my $opts;
@@ -68,8 +70,7 @@ sub regex_range {
   # regex_range() => error by default
   if( $opts->{allow_wildcard} ) {
     if(!defined $min and !defined $max) {
-      return qr/[+]?\d+/;
-      #return qr/[-+]?\d+/;
+      return _format_regex( '\d+', $passed_min, $passed_max, $opts );
     }
   } else {
     die "regex_range: must specify either a min, a max, or the allow_wildcard option" unless defined $min or defined $max;
@@ -106,13 +107,12 @@ sub regex_range {
     ($min, $max) = ($max, $min);
   }
 
-  my $zeroes_maybe = $opts->{no_leading_zeroes} ? '' : '0*';
 
   die "regex_range; min must be less than or equal to max" if $max < $min;
 
   die "TODO: support for negative values not yet implemented" if $min < 0;
 
-  return qr/$zeroes_maybe$min/ if $min == $max;
+  return _format_regex( $min, $passed_min, $passed_max, $opts )  if  $min == $max;
 
 #  $min-- unless $opts->{exclusive_min} || $opts->{exclusive};
 #  $max++ unless $opts->{exclusive_max} || $opts->{exclusive};
@@ -137,7 +137,9 @@ sub regex_range {
   for(my $digit_pos = $rightmost; $digit_pos >= $leftmost; $digit_pos--) {
     $header = substr($header, 0, length($header)-1);
     my $trailer_len = $rightmost - $digit_pos;
-    my $trailer = '\d'x$trailer_len;
+    my $trailer = $trailer_len == 0 ? "" :
+                  $trailer_len > 1 ? "\\d{$trailer_len}" :
+                  '\d';
 
     my $digit   = substr($padded_min, $digit_pos-1, 1);
 
@@ -166,7 +168,9 @@ sub regex_range {
   for(my $digit_pos = $leftmost+1; $digit_pos <= $rightmost; $digit_pos++) {
     my $header = substr($max, 0, $digit_pos-1);
     my $trailer_len = $rightmost - $digit_pos;
-    my $trailer = '\d'x$trailer_len;
+    my $trailer = $trailer_len == 0 ? "" :
+                  $trailer_len > 1 ? "\\d{$trailer_len}" :
+                  '\d';
 
     my $digit   = substr($max, $digit_pos-1, 1);
 
@@ -192,11 +196,28 @@ sub regex_range {
     push @patterns, "\\d{$min_digits,}";
   }
 
-  my $regex_str = join '|', @patterns;
-  my $optional_comment = $opts->{comment} ? "(?#Number::Range::Regex[$min..$max])" : '';
-  return qr/$zeroes_maybe(?:$regex_str)$optional_comment/;
+  my $separator = $opts->{readable} ? ' | ' : '|';
+  my $regex_str = join $separator, @patterns;
+  $regex_str = " $regex_str " if $opts->{readable};
+
+  return _format_regex( $regex_str, $passed_min, $passed_max, $opts );
 
 }
+
+sub _format_regex {
+  my ($regex_str, $min, $max, $opts) = @_;
+  my $modifier_maybe = $opts->{readable} ? '(?x)' : '';
+  my $sign_maybe     = $opts->{no_sign} ? '' : '[+]?';
+  my $zeroes_maybe   = $opts->{no_leading_zeroes} ? '' : '0*';
+  my $comment_maybe  = '';
+  if($opts->{comment}) {
+    ($min, $max) = map { defined $_ ? $_ : '[unset]' } ($min, $max);
+    my $comment = "Number::Range::Regex[$min..$max]";
+    $comment_maybe = $opts->{readable} ? " # $comment" : "(?#$comment)";
+  }
+  return qr/$modifier_maybe$sign_maybe$zeroes_maybe(?:$regex_str)$comment_maybe/;
+}
+
 
 1;
 

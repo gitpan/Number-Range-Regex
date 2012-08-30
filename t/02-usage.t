@@ -2,12 +2,14 @@
 $|++;
 
 use strict;
-use Test::More tests => 225;
+use Test::More tests => 228;
+
 use lib "./t";
 use _nrr_test_util;
-use lib "./blib/lib";
 
+use lib "./blib/lib";
 use Number::Range::Regex qw ( regex_range );
+
 my $features = Number::Range::Regex::features();
 my $range;
 
@@ -45,6 +47,15 @@ ok($range_commented ne $range_uncommented);
 ok(length $range_commented > length $range_uncommented);
 ok($range_commented =~ /[?][#]/);
 
+# tests for readable => 1
+$range = test_range_exhaustive( 17, 1123, {readable => 1} );
+ok($range);
+$range = test_range_partial( 53, undef, [53, 103], {readable => 1} );
+ok($range);
+$range = test_range_partial( undef, 53, [0, 53], {readable => 1} );
+ok($range);
+
+# tests for option-setting and default-restoring of init()
 Number::Range::Regex->init( foo => "bar" );
 ok(1); #called init() without dying
 eval {
@@ -200,7 +211,6 @@ ok("010" !~ /^$range$/);
 
 $range = test_range_exhaustive(19825, 20120);
 ok($range);
-
 #$range = test_range_partial(19825, 32101, [19800, 19911]);
 #$range = test_range_partial(19825, 32101, [31990, 32200]);
 $range = test_range_exhaustive(19825, 32101);
