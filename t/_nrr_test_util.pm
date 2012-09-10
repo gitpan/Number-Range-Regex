@@ -3,6 +3,21 @@ $|++;
 
 use strict;
 
+sub test_rangeobj_exhaustive {
+  my ($tr) = @_;
+  my $regex = $tr->regex();
+  die "cannot exhaustively test infinite ranges"  if  !defined $tr->{min} or !defined $tr->{max};
+  return  if  ($tr->{min}-1) =~ /^$regex$/;
+  for(my $c=$tr->{min}; $c<=$tr->{max}; ++$c) {
+    if("$c" !~ /^$regex$/) {
+      warn "failed (exhaustive) test tr($tr->{min}, $tr->{max}, $tr->regex}) - failed $c =~ /^$regex$/\n";
+      return;
+    }
+  }
+  return  if  ($tr->{max}+1) =~ /^$regex$/;
+  return $tr;
+}
+
 sub test_range_random {
   my($min, $max, $trials, $verbose, $opts) = @_;
   die "cannot randomly test infinite ranges"  if  !defined $min or !defined $max;
@@ -62,17 +77,43 @@ sub test_range_exhaustive {
   my $range = regex_range($min, $max);
   return  unless  $range;
   return  if  ($min-1) =~ /^$range$/;
-  return  if  $min !~ /^$range$/;
   for(my $c=$min; $c<=$max; ++$c) {
     if("$c" !~ /^$range$/) {
       warn "failed (exhaustive) test $c =~ /^$range$/, min: $min, max: $max\n";
       return;
     }
   }
-  return  if  $max !~ /^$range$/;
   return  if  ($max+1) =~ /^$range$/;
   return $range;
 }
+
+sub test_all_ranges_exhaustively {
+  my ($min_min, $max_max) = @_;
+  for my $start ($min_min..$max_max) {
+    for my $end ($start..$max_max) {
+      my $range = test_range_exhaustive( $start, $end );
+      return unless $range;
+    }
+  }
+  return 1;
+}
+
+sub test_range_regex {
+  my($min, $max, $regex, $opts) = @_;
+  die "cannot test infinite ranges"  if  !defined $min or !defined $max;
+  return  unless  $regex;
+  return  if  ($min-1) =~ /^$regex$/;
+  for(my $c=$min; $c<=$max; ++$c) {
+    if("$c" !~ /^$regex$/) {
+      warn "failed (range_regex) test $c =~ /^$regex$/, min: $min, max: $max\n";
+      return;
+    }
+  }
+  return  if  ($max+1) =~ /^$regex$/;
+  return $regex;
+}
+
+
 
 1;
 

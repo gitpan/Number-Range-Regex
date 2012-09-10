@@ -2,8 +2,13 @@ Changes
 MANIFEST
 Makefile.PL
 lib/Number/Range/Regex.pm
+lib/Number/Range/Regex/Range.pm
+lib/Number/Range/Regex/TrivialRange.pm
 t/_nrr_test_util.pm
 t/01-load.t
 t/02-usage.t
+t/03-trivialrange-usage.t
+t/04-range-usage.t
+t/05-setops.t
 
 META.yml                                 Module meta-data (added by MakeMaker)

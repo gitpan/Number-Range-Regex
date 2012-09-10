@@ -2,7 +2,7 @@
 $|++;
 
 use strict;
-use Test::More tests => 228;
+use Test::More tests => 247;
 
 use lib "./t";
 use _nrr_test_util;
@@ -333,6 +333,11 @@ $end   = int rand $MAX_INT;
 $start = int rand $end;
 $range = test_range_random($start, $end, 1000, 0);
 ok($range);
+my $ss = $start-5;
+$ss = 0  if  $ss < 0;
+$range = test_range_partial($start, $end, [$ss, $start+5], [$end-5, $end+5] );
+ok($range);
+$range = test_range_partial
 # test a spread that involves a lot of digit boundary crossings
 $end   = int rand $MAX_INT;
 my $log_end = log($end)/log(10);
@@ -340,4 +345,37 @@ my $max_power = int($log_end / 2);
 $start = int rand($end/10**$max_power);
 $range = test_range_random($start, $end, 1000, 0);
 ok($range);
+$ss = $start-5;
+$ss = 0  if  $ss < 0;
+$range = test_range_partial($start, $end, [$ss, $start+5], [$end-5, $end+5] );
+ok($range);
+
+# paranoia - test the code from the perldoc and some variations thereon
+$range = regex_range( 15, 3210 );
+ok($range);
+ok( "foobar445baazquux" =~ /$range/ );
+ok( "foobar445baazquux" !~ /^$range$/ );
+ok( 445 =~ /^$range$/ );
+ok( 445 =~ /$range/ );
+ok( "field1 477 rest of line" =~ /^\S+\s+$range\s/ );
+
+# max has leading zero(es)
+$range = test_range_exhaustive( 17, "01123" );
+ok($range);
+$range = test_range_exhaustive( 17, "001123" );
+ok($range);
+
+# try all of 0..12 x 0..12 exhaustively (this catches the bug from r2820)
+ok( test_all_ranges_exhaustively( 0, 12 ) );
+
+# try to catch more corner cases
+ok( test_all_ranges_exhaustively( "098", 102 ) );
+ok( test_all_ranges_exhaustively( 98, 102 ) );
+ok( test_all_ranges_exhaustively( 198, 202 ) );
+ok( test_all_ranges_exhaustively( 898, 902 ) );
+ok( test_all_ranges_exhaustively( 988, 992 ) );
+ok( test_all_ranges_exhaustively( 998, 1002 ) );
+ok( test_all_ranges_exhaustively( 1998, 2002 ) );
+ok( test_all_ranges_exhaustively( 1098, 1102 ) );
+
 

@@ -1,6 +1,13 @@
 Revision history for Perl extension Number::Range::Regexp
 
-0.07  Aug 29 21:23:23 2012
+0.08  Sep 10 15:47:15 EDT 2012 r2874
+   -  object-orient-ify and implement union (intersect on the way)
+   -  use string ops to avoid fp-induced bugs with large numbers
+   -  thoroughly test 0..12 x 0..12 with regex_range()
+   -  add some more targetted test cases
+   -  refactor the two loops in regex_range to have parallel construction
+
+0.07  Aug 29 21:23:23 2012 svn r2817
    -  readability: change e.g. '\d\d\d\d\d\d' to '\d{6}'
    -  $opts->{readable} implemented
    -  comment now works properly when min/max is undef
@@ -11,14 +18,14 @@ Revision history for Perl extension Number::Range::Regexp
 0.05  Tue Aug 28 22:20:42 2012
    -  silence a debug warning that was left enabled by accident
 
-0.04  Tue Aug 28 21:44:08 2012
+0.04  Tue Aug 28 21:44:08 2012 svn r2800
    -  auto-commenting implemented and enabled by default
 
-0.03  Tue Aug 28 04:21:52 2012
+0.03  Tue Aug 28 04:21:52 2012 svn r2794
    -  more exhaustive and informative test scripts
 
 0.02  Thu Aug 23 13:45:23 2012
-   -  no_loading_zeroes option implemented
+   -  no_leading_zeroes option implemented
 
 0.01  Thu Aug 23 11:27:39 2012
    -  original version
