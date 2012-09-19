@@ -8,15 +8,17 @@ package Number::Range::Regex;
 
 use strict;
 use Number::Range::Regex::Range;
+use Number::Range::Regex::Util qw ( multi_union );
 use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION ); 
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter );
-@EXPORT = @EXPORT_OK = qw( regex_range );
+@EXPORT = qw( regex_range );
+@EXPORT_OK =  qw( init range rangespec regex_range );
 
-$VERSION = '0.08';
+$VERSION = '0.09';
 
 my $default_opts = $Number::Range::Regex::Range::default_opts;
 my $init_opts = $default_opts;
@@ -56,9 +58,53 @@ sub regex_range {
     $opts = $init_opts;
   }
 
-  my $range = Number::Range::Regex::Range->new_by_range( $min, $max, $opts );
+  my $range = Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
 
   return $range->regex( $opts );
+}
+
+sub range {
+  return Number::Range::Regex::SimpleRange->new( @_ );
+}
+
+sub rangespec {
+  my ($opts, $passed_opts);
+  if(ref $_[-1]) {
+    $passed_opts = pop;
+    die "rangespec with options unimplemented";
+#    # local options can override defaults
+#    if($passed_opts) {
+#      die "too many arguments" unless ref $passed_opts eq 'HASH';
+#      # make a copy of options hashref, add overrides
+#      $opts = { %{$default_opts} };
+#      while (my ($key, $val) = each %$passed_opts) {
+#        $opts->{$key} = $val;
+#      }
+#    } else {
+#      $opts = $default_opts;
+#    }
+  }
+  # allow rangespec(5,6,7) == rangespec("5,6,7");
+  my $range = join ',', @_;
+
+  # TODO: allow ..3 to mean less than 3, 3.. to mean more than 3?
+  my $section_validate  = qr/(?:\d+\.\.\d+|\d+)/;
+  my $range_validate = qr/$section_validate(?:,$section_validate)*/;
+  $range =~ s/\s+//g;
+  die "invalid range '$range'"  unless  $range =~ /^$range_validate$/;
+
+  my @sections = split(',', $range);
+  my @ranges;
+  foreach my $section (@sections) {
+    if($section =~ /^(\d+)\.\.(\d+)$/) {
+      push @ranges, Number::Range::Regex::SimpleRange->new( $1, $2 );
+    } elsif($section =~ /^(\d+)$/) {
+      push @ranges, Number::Range::Regex::SimpleRange->new( $1, $1 );
+    } else {
+      die "can't parse section: '$section'";
+    }
+  }
+  return multi_union(@ranges);
 }
 
 1;
@@ -71,6 +117,8 @@ Number::Range::Regex - create regular expressions that check for
                        integers in a given range
 
 =head1 SYNOPSIS
+
+TODO: this is out of date
 
   use Number::Range::Regex;
   my $range = regex_range( 15, 3210 );

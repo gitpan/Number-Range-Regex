@@ -1,5 +1,15 @@
 Revision history for Perl extension Number::Range::Regexp
 
+0.09  Sep 19 18:31:36 EDT 2012 r2915
+   -  NRR implements range() and rangespec() as recommended API
+   -  intersection, subtraction, xor implemented
+   -  EmptyRange->new()->regex() no longer dies - it now returns a regex
+      that doesn't match anything
+   -  clearer inheritance
+   -  operate internally on SimpleRanges, not TrivialRanges. this allows
+      for simpler code and faster operation (O(1) vs. O(lg n))
+   -  implement iterators
+
 0.08  Sep 10 15:47:15 EDT 2012 r2874
    -  object-orient-ify and implement union (intersect on the way)
    -  use string ops to avoid fp-induced bugs with large numbers

@@ -3,10 +3,35 @@ $|++;
 
 use strict;
 
+# usage: specify the types a range is - the range must NOT be
+# of any type you do not mention (except NRR::Range), so e.g.:
+#  check_type($range, 'Simple, Trivial' );
+# checks for !Empty, !Compound. a TrivialRange should match. so:
+#  check_type( $trivial, 'Trivial' ) -> returns false (also a Simple)
+#  check_type( $trivial, 'Simple' ) -> returns false (also a Trivial)
+# also note check_type($r, "foo bar") == check_type($r, qw ( foo bar ) );
+sub check_type {
+  my ($range, @yes_types) = @_;
+  @yes_types = map { s/^\s*//; s/\s*$//; $_ } map { split /,/, $_ } @yes_types;
+  my %types;
+  $types{$_} = 0  for  ( qw ( Empty Simple Trivial Compound ) );
+  $types{$_} = 1  for  ( '', map { s/^(.)/\u$1/; $_ } @yes_types );
+  my $ret = 1;
+  foreach my $key (keys %types) {
+    my $type = $key;
+    if ( $range->isa( "Number::Range::Regex::${type}Range" ) != $types{$key} ) {
+      warn "check_type: error: range is not a ${type}Range\n";
+      $ret = 0;
+    }
+  }
+  return $ret;
+}
+
+
 sub test_rangeobj_exhaustive {
   my ($tr) = @_;
   my $regex = $tr->regex();
-  die "cannot exhaustively test infinite ranges"  if  !defined $tr->{min} or !defined $tr->{max};
+  die "cannot exhaustively test infinite/compound ranges"  if  !defined $tr->{min} or !defined $tr->{max};
   return  if  ($tr->{min}-1) =~ /^$regex$/;
   for(my $c=$tr->{min}; $c<=$tr->{max}; ++$c) {
     if("$c" !~ /^$regex$/) {
@@ -20,7 +45,7 @@ sub test_rangeobj_exhaustive {
 
 sub test_range_random {
   my($min, $max, $trials, $verbose, $opts) = @_;
-  die "cannot randomly test infinite ranges"  if  !defined $min or !defined $max;
+  die "cannot randomly test infinite/compound ranges"  if  !defined $min or !defined $max;
   my $range = regex_range($min, $max);
   return  unless  $range;
   my $spread = $max - $min;
@@ -73,7 +98,7 @@ sub test_range_partial {
 
 sub test_range_exhaustive {
   my($min, $max, $opts) = @_;
-  die "cannot exhaustively test infinite ranges"  if  !defined $min or !defined $max;
+  die "cannot exhaustively test infinite/compound ranges"  if  !defined $min or !defined $max;
   my $range = regex_range($min, $max);
   return  unless  $range;
   return  if  ($min-1) =~ /^$range$/;
@@ -100,7 +125,7 @@ sub test_all_ranges_exhaustively {
 
 sub test_range_regex {
   my($min, $max, $regex, $opts) = @_;
-  die "cannot test infinite ranges"  if  !defined $min or !defined $max;
+  die "cannot test infinite/compound ranges"  if  !defined $min or !defined $max;
   return  unless  $regex;
   return  if  ($min-1) =~ /^$regex$/;
   for(my $c=$min; $c<=$max; ++$c) {

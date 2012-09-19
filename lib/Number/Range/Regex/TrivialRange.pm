@@ -6,15 +6,23 @@
 
 package Number::Range::Regex::TrivialRange;
 
+# one range, expressible in the form $header.$range.$trailer, where
+#  header = \d+
+#  range = [\d-\d]
+#  trailer = \\d+
+# e.g. 12[3-8]\d\d
+
 use strict;
 use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION ); 
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
 use base 'Exporter';
-@ISA    = qw( Exporter );
+@ISA    = qw( Exporter Number::Range::Regex::SimpleRange );
 
-$VERSION = '0.08';
+use Number::Range::Regex::SimpleRange;
+
+$VERSION = '0.09';
 
 sub new {
   my ($class, $min, $max, $regex) = @_;
@@ -26,61 +34,7 @@ sub regex {
   return $self->{regex};
 }
 
-sub intersect { intersection(@_); }
-sub intersection {
-  my ($self, $other) = @_;
-  my ($lower, $upper) = ($self->{min} < $other->{min}) ?
-                        ($self, $other) : 
-                        ($other, $self);
-  if($upper->{min} <= $lower->{max}) {
-    # they overlap
-    return $upper  if  $upper->{max} <= $lower->{max};
-    my $range = Number::Range::Regex::Range->new_by_range(
-                  $upper->{min}, $lower->{max} );
-#    return $range->{ranges}->[0]  if  @{$range->{ranges}} == 1;
-    return $range;
-  } else {
-    # no intersection
-    return bless { ranges => [] }, 'Number::Range::Regex::Range';
-  }
-}
-
-sub union {
-  my ($self, $other) = @_;
-  my ($lower, $upper) = ($self->{min} < $other->{min}) ?
-                        ($self, $other) : 
-                        ($other, $self);
-  if($upper->{min} <= $lower->{max}+1) {
-    # they touch
-    return $lower  if  $lower->{max} >= $upper->{max};
-    my $range = Number::Range::Regex::Range->new_by_range( $lower->{min}, 
-      $self->{max} > $other->{max} ? $self->{max} : $other->{max} );
-#    return $range->{ranges}->[0]  if  @{$range->{ranges}} == 1;
-    return $range;
-  } else {
-    # two disjount TrivialRanges
-    return bless { ranges => [ $lower, $upper ] }, 'Number::Range::Regex::Range';
-  }
-}
-
-sub touches {
-  my ($self, @other) = @_;
-  foreach my $other (@other) {
-    my ($lower, $upper) = ($self->{min} < $other->{min}) ?
-                          ($self, $other) : 
-                          ($other, $self);
-    return 1  if  $upper->{min} <= $lower->{max}+1;
-  }
-  return
-}
-
-#sub touches {
-#  my ($self, $other) = @_;
-#  my ($lower, $upper) = ($self->{min} < $other->{min}) ?
-#                        ($self, $other) : 
-#                        ($other, $self);
-#  return $upper->{min} <= $lower->{max}+1;
-#}  
+# touches/union/intersect/subtract inherit from SimpleRange.pm
 
 1;
 

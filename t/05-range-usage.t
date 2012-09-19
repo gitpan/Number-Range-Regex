@@ -2,23 +2,23 @@
 $|++;
 
 use strict;
-use Test::More tests => 124;
+use Test::More tests => 130;
 
 use lib "./t";
 use _nrr_test_util;
 
 use lib "./blib/lib";
-use Number::Range::Regex;
+use Number::Range::Regex qw ( range rangespec );
 
-my $r_1XX = Number::Range::Regex::Range->new_by_range(100, 199);
+my $r_1XX = range(100, 199);
 ok(test_rangeobj_exhaustive($r_1XX));
-my $r_12X = Number::Range::Regex::Range->new_by_range(120, 129);
+my $r_12X = range(120, 129);
 ok(test_rangeobj_exhaustive($r_12X));
-my $r_14X = Number::Range::Regex::Range->new_by_range(140, 149);
+my $r_14X = range(140, 149);
 ok(test_rangeobj_exhaustive($r_14X));
-my $r_100_to_149 = Number::Range::Regex::Range->new_by_range(100, 149);
+my $r_100_to_149 = range(100, 149);
 ok(test_rangeobj_exhaustive($r_100_to_149));
-my $r_130_to_179 = Number::Range::Regex::Range->new_by_range(130, 179);
+my $r_130_to_179 = range(130, 179);
 ok(test_rangeobj_exhaustive($r_130_to_179));
 
 my ($range, $c, $re);
@@ -58,6 +58,18 @@ ok(130 =~ /^$re$/);
 ok(150 =~ /^$re$/);
 ok(199 =~ /^$re$/);
 ok(200 !~ /^$re$/);
+
+# test uncollapsible ranges
+my $r_1XXb = range(101, 198);
+ok(test_rangeobj_exhaustive($r_1XXb));
+my $r_12Xb = range(121, 128);
+ok(test_rangeobj_exhaustive($r_12Xb));
+$range = $r_1XXb->union($r_12Xb);
+$re = $range->regex;
+ok($range);
+ok($re);
+ok($range->{min} == $r_1XXb->{min});
+ok($range->{max} == $r_1XXb->{max});
 
 # overlap with an other that is higher
 $range = $r_100_to_149->union($r_130_to_179);
@@ -130,59 +142,59 @@ ok(149 =~ /^$re$/);
 ok(150 !~ /^$re$/);
 
 
-$range = Number::Range::Regex::Range->new_by_range(100, 104);
+$range = range(100, 104);
 ok($range);
 ok($range->regex);
 ok(test_range_regex(100, 104, $range->regex));
-ok($range->{contiguous});
+ok(check_type($range, 'Simple' ));
 
-$range = $range->union( Number::Range::Regex::Range->new_by_range(106, 109) );
+$range = $range->union( range(106, 109) );
 ok($range);
 ok($range->regex);
 ok(test_range_regex(100, 104, $range->regex));
 ok(test_range_regex(106, 109, $range->regex));
-ok(!$range->{contiguous});
+ok(check_type($range, 'Compound' ));
 
-$range = $range->union( Number::Range::Regex::Range->new_by_range(104, 106) );
+$range = $range->union( range(104, 106) );
 ok($range);
 ok($range->regex);
 ok(test_range_regex(100, 109, $range->regex));
-ok($range->{contiguous});
+ok(check_type($range, 'Simple' ));
 
-$range = Number::Range::Regex::Range->new_by_range(99, 104);
+$range = range(99, 104);
 ok($range);
 ok($range->regex);
 ok(test_range_regex(99, 104, $range->regex));
-ok($range->{contiguous});
+ok(check_type($range, 'Simple' ));
 
-$range = $range->union( Number::Range::Regex::Range->new_by_range(106, 109) );
+$range = $range->union( range(106, 109) );
 ok($range);
 ok($range->regex);
 ok(test_range_regex(99, 104, $range->regex));
 ok(test_range_regex(106, 109, $range->regex));
-ok(!$range->{contiguous});
+ok(check_type($range, 'Compound' ));
 
-$range = $range->union( Number::Range::Regex::Range->new_by_range(105, 105) );
+$range = $range->union( range(105, 105) );
 ok($range);
 ok($range->regex);
 ok(test_range_regex(99, 109, $range->regex));
-ok($range->{contiguous});
+ok(check_type($range, 'Simple' ));
 
-$range = Number::Range::Regex::Range->new_by_range(3, 37);
+$range = range(3, 37);
 ok($range);
-ok($range->{contiguous});
-$range = $range->union( Number::Range::Regex::Range->new_by_range(40,50) );
+ok(check_type($range, 'Simple' ));
+$range = $range->union( range(40,50) );
 ok($range);
-ok(!$range->{contiguous});
-$range = $range->union( Number::Range::Regex::Range->new_by_range(61, 71) );
+ok(check_type($range, 'Compound' ));
+$range = $range->union( range(61, 71) );
 ok($range);
-ok(!$range->{contiguous});
-$range = $range->union( Number::Range::Regex::Range->new_by_range(82, 92) );
+ok(check_type($range, 'Compound' ));
+$range = $range->union( range(82, 92) );
 ok($range);
 my $rlength = length($range->regex);
-ok(!$range->{contiguous});
-$range = $range->union( Number::Range::Regex::Range->new_by_range(7, 85) );
+ok(check_type($range, 'Compound' ));
+$range = $range->union( range(7, 85) );
 ok($range);
 ok($rlength > length($range->regex));
-ok($range->{contiguous});
+ok(check_type($range, 'Simple' ));
 
