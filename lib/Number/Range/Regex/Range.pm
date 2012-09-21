@@ -12,17 +12,17 @@ eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
 use base 'Exporter';
-@ISA    = qw( Exporter );
+@ISA = qw( Exporter );
 
 use Number::Range::Regex::EmptyRange;
 use Number::Range::Regex::SimpleRange;
 use Number::Range::Regex::CompoundRange;
 
-$VERSION = '0.09';
+$VERSION = '0.10';
 
 our $default_opts = {
   allow_wildcard => 0,
-  autoswap => 0,
+  autoswap       => 0,
 
   no_leading_zeroes => 0,
   no_sign           => 0,
@@ -30,9 +30,13 @@ our $default_opts = {
   readable          => 0,
 };
 
-sub defaults { return $default_opts };
+sub iterator {
+  my ($self) = @_;        
+  return Number::Range::Regex::Iterator->new( $self );
+}
 
 sub new { die "called abstract Range->new() on a ".ref($_[0]) }
+sub to_string { die "called abstract Range->to_string() on a ".ref($_[0]) }
 sub regex { die "called abstract Range->regex() on a ".ref($_[0]) }
 sub intersect { intersection(@_); }
 sub intersection { die "called abstract Range->intersection() on a ".ref($_[0]) }
@@ -41,6 +45,7 @@ sub touches { die "called abstract Range->touches() on a ".ref($_[0]) }
 sub minus { subtract(@_); }
 sub subtraction { subtract(@_); }
 sub subtract { die "called abstract Range->subtract() on a ".ref($_[0]) }
+sub contains { die "called abstract Range->contains() on a ".ref($_[0]) }
 
 1;
 

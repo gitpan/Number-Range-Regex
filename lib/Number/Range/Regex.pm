@@ -1,4 +1,5 @@
 # Number::Range::Regex
+
 #
 # Copyright 2012 Brian Szymanski.  All rights reserved.  This module is
 # free software; you can redistribute it and/or modify it under the same
@@ -8,17 +9,18 @@ package Number::Range::Regex;
 
 use strict;
 use Number::Range::Regex::Range;
-use Number::Range::Regex::Util qw ( multi_union );
+use Number::Range::Regex::Iterator;
+use Number::Range::Regex::Util;
 use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION ); 
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter );
-@EXPORT = qw( regex_range );
+@EXPORT = qw( range rangespec );
 @EXPORT_OK =  qw( init range rangespec regex_range );
 
-$VERSION = '0.09';
+$VERSION = '0.10';
 
 my $default_opts = $Number::Range::Regex::Range::default_opts;
 my $init_opts = $default_opts;
@@ -68,26 +70,23 @@ sub range {
 }
 
 sub rangespec {
-  my ($opts, $passed_opts);
+  my $opts;
   if(ref $_[-1]) {
-    $passed_opts = pop;
-    die "rangespec with options unimplemented";
-#    # local options can override defaults
-#    if($passed_opts) {
-#      die "too many arguments" unless ref $passed_opts eq 'HASH';
-#      # make a copy of options hashref, add overrides
-#      $opts = { %{$default_opts} };
-#      while (my ($key, $val) = each %$passed_opts) {
-#        $opts->{$key} = $val;
-#      }
-#    } else {
-#      $opts = $default_opts;
-#    }
+    $opts = option_mangler( pop );
   }
-  # allow rangespec(5,6,7) == rangespec("5,6,7");
-  my $range = join ',', @_;
+  # we allow (but do not like) e.g. rangespec(5,7,10..18);
+  # we don't like it because it can make us run out of memory for
+  # large ranges. preferred: rangespec('5,7,10..18');
+  my $range;
+  if(@_ > 1) {
+    warn "passed literal range to rangespec!\n";
+    $range = join ',', @_;
+  } else {
+    $range = $_[0];
+  }
 
-  # TODO: allow ..3 to mean less than 3, 3.. to mean more than 3?
+  # TODO: allow ..3 to mean less than 3, 3.. to mean more than 3 as in
+  #       regex_range ?
   my $section_validate  = qr/(?:\d+\.\.\d+|\d+)/;
   my $range_validate = qr/$section_validate(?:,$section_validate)*/;
   $range =~ s/\s+//g;
@@ -97,14 +96,16 @@ sub rangespec {
   my @ranges;
   foreach my $section (@sections) {
     if($section =~ /^(\d+)\.\.(\d+)$/) {
-      push @ranges, Number::Range::Regex::SimpleRange->new( $1, $2 );
+      push @ranges, Number::Range::Regex::SimpleRange->new( $1, $2, $opts );
     } elsif($section =~ /^(\d+)$/) {
-      push @ranges, Number::Range::Regex::SimpleRange->new( $1, $1 );
+      push @ranges, Number::Range::Regex::SimpleRange->new( $1, $1, $opts );
     } else {
       die "can't parse section: '$section'";
     }
   }
-  return multi_union(@ranges);
+  # note: multi_union() will have the side effect of sorting
+  #       and de-overlap-ify-ing the input ranges
+  return multi_union( @ranges );
 }
 
 1;
@@ -118,24 +119,48 @@ Number::Range::Regex - create regular expressions that check for
 
 =head1 SYNOPSIS
 
-TODO: this is out of date
-
   use Number::Range::Regex;
-  my $range = regex_range( 15, 3210 );
-  if( $jibberish =~ /$range/ ) {
-    print "your jibberish contains an integer between 15 and 3210";
+  my $lt_20    = range( 0, 19 );
+  my $lt_20_re = $lt_20->regex();
+
+  print "your stuff contains an integer < 20" if $jibberish =~ /$lt_20_re/;
+  print "your stuff is an integer < 20" if $jibberish =~ /$^lt_20_re$/;
+  if( $line =~ /^\S+\s+$lt_20_re\s/ ) {
+    print "the second field is an integer < 20";
   }
-  if( $num =~ /^$range$/ ) {
-    print "$num is an integer between 15 and 3210";
+  my $nice_numbers = rangespec( "42,175..192" );
+  my $special_values_re = $lt_20->union( $nice_numbers )->regex;
+  if( $line =~ /^\S+\s+$special_values_re\s/ ) {
+    print "the second field has a special value";
   }
-  if( $line =~ /^\S+\s+$range\s/ ) {
-    print "the second field is an integer between 15 and 3210";
+
+  my $lt_10        = range( 0, 9 );
+  my $primes_lt_30 = rangespec( "2,3,5,7,11,13,17,19,23,29" );
+  my $primes_lt_10 = $lt_10->intersection( $primes_lt_30 );
+  my $primes_lt_10_re = $primes_lt_10->regex;
+  my $nonprimes_lt_10 = $lt_10->minus( $primes_lt_30 );
+  print "nonprimes under 10 contains: ".join",", $nonprimes_lt_10->to_string;
+  my $nonprimes_lt_10_re = $nonprimes_lt_10->regex;
+  if( $something =~ /^$nonprimes_lt_10_re$/ ) {
+    print "something($something) is a nonprime less than 10";
   }
-  my $octet = regex_range(0, 255);
+  if( $nonprimes_lt_10->contains( $something ) ) {
+    print "something($something) is a nonprime less than 10";
+  }
+  
+  my $octet = range(0, 255)->regex;
   my $ip4_match = qr/^$octet\.$octet\.$octet\.$octet$/;
-  my $range_96_to_127 = regex_range(96, 127);
-  my $my_slash26_match = qr/^192\.168\.42\.$range_96_to_127$/;
-  my $my_slash19_match = qr/^192\.168\.$range_96_to_127\.$octet$/;
+  my $re_96_to_127 = range(96, 127)->regex;
+  my $my_slash26_match = qr/^192\.168\.42\.$re_96_to_127$/;
+  my $my_slash19_match = qr/^192\.168\.$re_96_to_127\.$octet$/;
+
+  my $in_a_or_in_b_but_not_both = $a->xor($b);
+
+  my $it = $range->iterator();
+  $it->first;
+  do { print $it->fetch } while ($it->next);
+  $it->last;
+  do { print $it->fetch } while ($it->prev);
   
 
 =head1 DESCRIPTION
@@ -146,8 +171,8 @@ which is more legible - this?
 
 or this?
 
-  my $day_range = regex_range(1, 31);
-  my $month_range = regex_range(1, 12);
+  my $day_range = range(1, 31)->regex();
+  my $month_range = range(1, 12)->regex();
   $date =~ m/^$day_range\/$month_range$/;
 
 (bonus points if you spotted the bug)
@@ -161,7 +186,7 @@ expression and verify the range of the number separately, eg:
 but it's not always practical to refactor in that way.
 
 If you like one-liners, something like the following may suit you...
-  m{^${\( regex_range(1, 31) )}\/${\( regex_range(1, 12) )}$}
+  m{^${\( range(1, 31)->regex )}\/${\( range(1, 12)->regex )}$}
 but, for readability's sake, please don't do that!
 
 

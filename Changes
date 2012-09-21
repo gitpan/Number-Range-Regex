@@ -1,5 +1,17 @@
 Revision history for Perl extension Number::Range::Regexp
 
+0.10  Sep 20 23:37:45 EDT 2012 r2938
+   -  regex_range( ... ) deprecated in favor of range( ... )->regex
+   -  range & rangespec exported by default
+   -  implement contains() to check for range membership w/o regexification
+   -  document iterators
+   -  common, fast implementation of all set ops (except union)
+   -  implement to_string() to describe ranges
+   -  EmptyRange->to_string() is now an empty string for consistency
+   -  seemlessly promote SimpleRanges to CompoundRanges when necessary
+   -  EmptyRange->regex() is now a regex that does not match anything
+   -  unify option mangling code
+
 0.09  Sep 19 18:31:36 EDT 2012 r2915
    -  NRR implements range() and rangespec() as recommended API
    -  intersection, subtraction, xor implemented

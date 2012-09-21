@@ -2,7 +2,7 @@
 $|++;
 
 use strict;
-use Test::More tests => 247;
+use Test::More tests => 241;
 
 use lib "./t";
 use _nrr_test_util;
@@ -349,15 +349,6 @@ $ss = $start-5;
 $ss = 0  if  $ss < 0;
 $range = test_range_partial($start, $end, [$ss, $start+5], [$end-5, $end+5] );
 ok($range);
-
-# paranoia - test the code from the perldoc and some variations thereon
-$range = regex_range( 15, 3210 );
-ok($range);
-ok( "foobar445baazquux" =~ /$range/ );
-ok( "foobar445baazquux" !~ /^$range$/ );
-ok( 445 =~ /^$range$/ );
-ok( 445 =~ /$range/ );
-ok( "field1 477 rest of line" =~ /^\S+\s+$range\s/ );
 
 # max has leading zero(es)
 $range = test_range_exhaustive( 17, "01123" );

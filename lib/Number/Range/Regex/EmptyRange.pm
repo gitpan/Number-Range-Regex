@@ -8,22 +8,42 @@ package Number::Range::Regex::EmptyRange;
 
 use strict;
 use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION ); 
+use Number::Range::Regex::Util;
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.09';
+$VERSION = '0.10';
 
 sub new {
   my ($class) = @_;
   return bless {}, $class; 
 }
 
+sub to_string {
+  my ($self, $passed_opts) = @_;
+  return '';
+}
+
 sub regex {
-  my ($self, $opts) = @_;
-  return qr /(?!)/; # never matches
+  my ($self, $passed_opts) = @_;
+
+  my $opts = option_mangler( $passed_opts );
+
+  my $regex_str = '(?!)'; # never matches
+  $regex_str = " $regex_str " if $opts->{readable};
+
+  my $modifier_maybe = $opts->{readable} ? '(?x)' : '';
+  my ($begin_comment_maybe, $end_comment_maybe) = ('', '');
+  if($opts->{comment}) {
+    my $comment = "Number::Range::Regex::EmptyRange";
+    $begin_comment_maybe = $opts->{readable} ? " # begin $comment" : "(?# begin $comment )";
+    $end_comment_maybe = $opts->{readable} ? " # end $comment" : "(?# end $comment )";
+  }
+
+  return qr/(?:$begin_comment_maybe$modifier_maybe(?:$regex_str)$end_comment_maybe)/;
 }
 
 sub touches { return; }
@@ -37,7 +57,7 @@ sub intersection {
 
 sub union {
   my ($self, @other) = @_;
-  return Number::Range::Regex::Util::multi_union( @other );
+  return multi_union( @other );
 }
 
 sub minus { subtract(@_); }
@@ -50,6 +70,11 @@ sub subtract {
 sub xor {
   my ($self, $other) = @_;
   return $other;
+}
+
+sub contains {
+  my ($self, $n) = @_;
+  return;
 }
 
 1;

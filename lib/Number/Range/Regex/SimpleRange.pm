@@ -20,23 +20,12 @@ use Number::Range::Regex::CompoundRange;
 use Number::Range::Regex::TrivialRange;
 use Number::Range::Regex::Util;
 
-$VERSION = '0.09';
+$VERSION = '0.10';
 
 sub new {
   my ($class, $min, $max, $passed_opts) = @_;
 
-  # local options can override defaults
-  my $opts;
-  if($passed_opts) {
-    die "too many arguments" unless ref $passed_opts eq 'HASH';
-    # make a copy of options hashref, add overrides
-    $opts = { %{$Number::Range::Regex::Range::default_opts} };
-    while (my ($key, $val) = each %$passed_opts) {
-      $opts->{$key} = $val;
-    }
-  } else {
-    $opts = $Number::Range::Regex::Range::default_opts;
-  }
+  my $opts = option_mangler( $passed_opts );
 
   if(defined $min) {
     if( $min !~ /^[+]?\d+$/ ) {
@@ -67,21 +56,25 @@ sub new {
   return bless { min => $min, max => $max }, $class; 
 }
 
+sub to_string {
+  my ($self, $passed_opts) = @_;
+  #my $opts = option_mangler( $passed_opts );
+  if($self->{min} == $self->{max}) {
+    return $self->{min};
+  # the prefer_comma option is dangerous because if you read in 3,4
+  # you don't get 3..4, but instead 3..3,4..4 which requires collapsing
+  #} elsif($self->{min}+$opts->{prefer_comma} >= $self->{max}) {
+  } elsif($self->{min} > $self->{max}) {
+    return join ',', ($self->{min}..$self->{max});
+  } else {
+    return "$self->{min}..$self->{max}";
+  }
+}
+
 sub regex {
   my ($self, $passed_opts) = @_;
 
-  # local options can override defaults
-  my $opts;
-  if($passed_opts) {
-    die "too many arguments" unless ref $passed_opts eq 'HASH';
-    # make a copy of options hashref, add overrides
-    $opts = { %{$Number::Range::Regex::Range::default_opts} };
-    while (my ($key, $val) = each %$passed_opts) {
-      $opts->{$key} = $val;
-    }
-  } else {
-    $opts = $Number::Range::Regex::Range::default_opts;
-  }
+  my $opts = option_mangler( $passed_opts );
 
   if(!defined $self->{tranges}) {
     $self->{tranges} = [ $self->_calculate_tranges( $opts ) ];
@@ -220,7 +213,9 @@ sub _do_range_setting_loop {
 sub intersect { intersection(@_); }
 sub intersection {
   my ($self, $other) = @_;
-  die "other argument is not a simple range (try swapping your args)"  unless  $other->isa('Number::Range::Regex::SimpleRange');
+  if( $other->isa('Number::Range::Regex::CompoundRange') ) {
+    return Number::Range::Regex::CompoundRange->new( $self )->intersection( $other);
+  }
   my ($lower, $upper) = ($self->{min} < $other->{min}) ?
                         ($self, $other) : 
                         ($other, $self);
@@ -233,12 +228,19 @@ sub intersection {
   }
 }
 
+sub _compound {
+  my ($self) = @_;
+  return Number::Range::Regex::CompoundRange->new( $self );
+}
+
 sub union {
   my ($self, @other) = @_;
-  return Number::Range::Regex::Util::multi_union( $self, @other )  if  @other > 1;
+  return multi_union( $self, @other )  if  @other > 1;
   my $other = shift @other;
+  if( $other->isa('Number::Range::Regex::CompoundRange') ) {
+    return Number::Range::Regex::CompoundRange->new( $self )->union( $other);
+  }
 
-  die "other argument is not a simple range (try swapping your args)"  unless  $other->isa('Number::Range::Regex::SimpleRange');
   my ($lower, $upper) = ($self->{min} < $other->{min}) ?
                         ($self, $other) : 
                         ($other, $self);
@@ -252,9 +254,12 @@ sub union {
 }
 
 sub minus { subtract(@_); }
+sub subtraction { subtract(@_); }
 sub subtract {
   my ($self, $other) = @_;
-  die "other argument is not a simple range (try swapping your args)"  unless  $other->isa('Number::Range::Regex::SimpleRange');
+  if( $other->isa('Number::Range::Regex::CompoundRange') ) {
+    return Number::Range::Regex::CompoundRange->new( $self )->subtract( $other);
+  }
   return $self  unless  $self->touches($other);
   if($self->{min} < $other->{min}) {
     if($self->{max} <= $other->{max}) {
@@ -285,7 +290,9 @@ sub subtract {
 
 sub xor {
   my ($self, $other) = @_;
-  die "other argument is not a simple range (try swapping your args)"  unless  $other->isa('Number::Range::Regex::SimpleRange');
+  if( $other->isa('Number::Range::Regex::CompoundRange') ) {
+    return Number::Range::Regex::CompoundRange->new( $self )->xor( $other);
+  }
   return $self->union($other)  unless  $self->touches($other);
   if($self->{min} < $other->{min}) {
     if($self->{max} < $other->{max}) {
@@ -366,6 +373,12 @@ sub touches {
   }
   return;
 }
+
+sub contains {
+  my ($self, $n) = @_;
+  return ($n >= $self->{min}) && ($n <= $self->{max});
+}
+
 
 1;
 

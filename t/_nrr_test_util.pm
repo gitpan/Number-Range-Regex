@@ -20,7 +20,7 @@ sub check_type {
   foreach my $key (keys %types) {
     my $type = $key;
     if ( $range->isa( "Number::Range::Regex::${type}Range" ) != $types{$key} ) {
-      warn "check_type: error: range is not a ${type}Range\n";
+      warn "check_type: error: range is not a ${type}Range";
       $ret = 0;
     }
   }
