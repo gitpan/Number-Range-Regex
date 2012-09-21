@@ -15,7 +15,7 @@ use base 'Exporter';
 @ISA    = qw( Exporter );
 @EXPORT = @EXPORT_OK = qw ( most min max multi_union option_mangler );
 
-$VERSION = '0.10';
+$VERSION = '0.11';
 
 sub min { return most( sub { $_[0] < $_[1] }, @_ ); }
 

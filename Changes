@@ -1,6 +1,6 @@
 Revision history for Perl extension Number::Range::Regexp
 
-0.10  Sep 20 23:37:45 EDT 2012 r2938
+0.11  Sep 20 23:37:45 EDT 2012 r2940
    -  regex_range( ... ) deprecated in favor of range( ... )->regex
    -  range & rangespec exported by default
    -  implement contains() to check for range membership w/o regexification

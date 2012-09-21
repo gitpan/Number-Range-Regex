@@ -15,7 +15,7 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.10';
+$VERSION = '0.11';
 
 sub new {
   my ($class, @ranges) = @_;

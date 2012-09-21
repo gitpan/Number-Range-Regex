@@ -20,7 +20,7 @@ use Number::Range::Regex::CompoundRange;
 use Number::Range::Regex::TrivialRange;
 use Number::Range::Regex::Util;
 
-$VERSION = '0.10';
+$VERSION = '0.11';
 
 sub new {
   my ($class, $min, $max, $passed_opts) = @_;

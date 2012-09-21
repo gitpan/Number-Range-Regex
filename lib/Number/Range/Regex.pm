@@ -20,7 +20,7 @@ use base 'Exporter';
 @EXPORT = qw( range rangespec );
 @EXPORT_OK =  qw( init range rangespec regex_range );
 
-$VERSION = '0.10';
+$VERSION = '0.11';
 
 my $default_opts = $Number::Range::Regex::Range::default_opts;
 my $init_opts = $default_opts;
