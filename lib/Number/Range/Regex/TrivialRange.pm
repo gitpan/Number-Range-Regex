@@ -22,7 +22,7 @@ use base 'Exporter';
 
 use Number::Range::Regex::SimpleRange;
 
-$VERSION = '0.11';
+$VERSION = '0.12';
 
 sub new {
   my ($class, $min, $max, $regex) = @_;

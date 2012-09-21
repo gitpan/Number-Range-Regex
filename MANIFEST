@@ -9,10 +9,11 @@ lib/Number/Range/Regex/SimpleRange.pm
 lib/Number/Range/Regex/TrivialRange.pm
 lib/Number/Range/Regex/Iterator.pm
 lib/Number/Range/Regex/Util.pm
-t/01-load.t
-t/02-validate-perldoc.t
-t/03-regex_range.t
-t/04-inheritance.t
+t/00-load.t
+t/01-validate-perldoc.t
+t/02-regex_range.t
+t/03-inheritance.t
+t/04-overloading.t
 t/05-rangespec.t
 t/06-range-usage.t
 t/07-trivialrange-usage.t

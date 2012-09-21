@@ -18,7 +18,7 @@ use Number::Range::Regex::EmptyRange;
 use Number::Range::Regex::SimpleRange;
 use Number::Range::Regex::CompoundRange;
 
-$VERSION = '0.11';
+$VERSION = '0.12';
 
 our $default_opts = {
   allow_wildcard => 0,

@@ -20,7 +20,7 @@ use base 'Exporter';
 @EXPORT = qw( range rangespec );
 @EXPORT_OK =  qw( init range rangespec regex_range );
 
-$VERSION = '0.11';
+$VERSION = '0.12';
 
 my $default_opts = $Number::Range::Regex::Range::default_opts;
 my $init_opts = $default_opts;
@@ -120,39 +120,36 @@ Number::Range::Regex - create regular expressions that check for
 =head1 SYNOPSIS
 
   use Number::Range::Regex;
-  my $lt_20    = range( 0, 19 );
-  my $lt_20_re = $lt_20->regex();
+  my $lt_20 = range( 0, 19 );
 
-  print "your stuff contains an integer < 20" if $jibberish =~ /$lt_20_re/;
-  print "your stuff is an integer < 20" if $jibberish =~ /$^lt_20_re$/;
-  if( $line =~ /^\S+\s+$lt_20_re\s/ ) {
-    print "the second field is an integer < 20";
+  print "foo($foo) contains an integer < 20" if $foo =~ /$lt_20/;
+  print "foo($foo) is an integer < 20" if $foo =~ /^$lt_20$/;
+  if( $line =~ /^\S+\s+($lt_20)\s/ ) {
+    print "the second field ($1) is an integer < 20";
   }
   my $nice_numbers = rangespec( "42,175..192" );
-  my $special_values_re = $lt_20->union( $nice_numbers )->regex;
-  if( $line =~ /^\S+\s+$special_values_re\s/ ) {
-    print "the second field has a special value";
+  my $my_values = $lt_20->union( $nice_numbers );
+  if( $line =~ /^\S+\s+($my_values)\s/ ) {
+    print "the second field has one of my values ($1)";
   }
 
-  my $lt_10        = range( 0, 9 );
+  my $lt_10        = rangespec( "0..9" );
   my $primes_lt_30 = rangespec( "2,3,5,7,11,13,17,19,23,29" );
   my $primes_lt_10 = $lt_10->intersection( $primes_lt_30 );
-  my $primes_lt_10_re = $primes_lt_10->regex;
   my $nonprimes_lt_10 = $lt_10->minus( $primes_lt_30 );
   print "nonprimes under 10 contains: ".join",", $nonprimes_lt_10->to_string;
-  my $nonprimes_lt_10_re = $nonprimes_lt_10->regex;
-  if( $something =~ /^$nonprimes_lt_10_re$/ ) {
+  if( $something =~ /^$nonprimes_lt_10$/ ) {
     print "something($something) is a nonprime less than 10";
   }
   if( $nonprimes_lt_10->contains( $something ) ) {
     print "something($something) is a nonprime less than 10";
   }
   
-  my $octet = range(0, 255)->regex;
+  my $octet = range(0, 255);
   my $ip4_match = qr/^$octet\.$octet\.$octet\.$octet$/;
-  my $re_96_to_127 = range(96, 127)->regex;
-  my $my_slash26_match = qr/^192\.168\.42\.$re_96_to_127$/;
-  my $my_slash19_match = qr/^192\.168\.$re_96_to_127\.$octet$/;
+  my $range_96_to_127 = range(96, 127);
+  my $my_slash26_match = qr/^192\.168\.42\.$range_96_to_127$/;
+  my $my_slash19_match = qr/^192\.168\.$range_96_to_127\.$octet$/;
 
   my $in_a_or_in_b_but_not_both = $a->xor($b);
 
@@ -171,8 +168,8 @@ which is more legible - this?
 
 or this?
 
-  my $day_range = range(1, 31)->regex();
-  my $month_range = range(1, 12)->regex();
+  my $day_range = range(1, 31);
+  my $month_range = range(1, 12);
   $date =~ m/^$day_range\/$month_range$/;
 
 (bonus points if you spotted the bug)
@@ -186,7 +183,7 @@ expression and verify the range of the number separately, eg:
 but it's not always practical to refactor in that way.
 
 If you like one-liners, something like the following may suit you...
-  m{^${\( range(1, 31)->regex )}\/${\( range(1, 12)->regex )}$}
+  m{^${\( range(1, 31) )}\/${\( range(1, 12) )}$}
 but, for readability's sake, please don't do that!
 
 
