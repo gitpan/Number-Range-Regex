@@ -2,48 +2,82 @@
 $|++;
 
 use strict;
-use Test::More tests => 492;
+use Test::More;
 
 use lib "./t";
 use _nrr_test_util;
 
 use lib "./blib/lib";
 use Number::Range::Regex qw ( range rangespec );
+use Number::Range::Regex::Util;
+
+if( has_regex_overloading() ) {
+  plan tests => 492;
+} else {
+  plan tests => 492;
+  diag "NOTE: overloading in regex context requires overload.pm version >= 1.10, will always overload as string";
+}
+
+sub _strip_regex_bloat {
+  my $str = (@_);
+  # depending on the version of perl, we may get one or more
+  # (?-xism: ... ) wrappers around the regex
+  while($str =~ /^\(\?\-xism\:/) {
+    $str = substr($str, 8, -1) 
+  }
+  return $str;
+}
 
 my $er = Number::Range::Regex::EmptyRange->new();
 ok($er); #in boolean context, should return the object
-ok("$er" eq ""); #in string context, should return empty string
 ok( !/^$er$/ ) for( 0,1,-1,"foo" ); #in regex context, a pattern that never matches
 ok( !/$er/ ) for( 0,1,-1,"foo" ); #regex context (part 2)
-my $er_re = qr/^$er$/;
-ok($er_re ne ""); #make sure we don't get the empty string as regex
+if( has_regex_overloading() ) {
+  ok("$er" eq $er->to_string()); #in string context, should return empty string
+  ok($er->to_string() ne qr/$er/); #make sure we don't get the empty string as regex
+} else {
+  ok("$er" ne $er->to_string()); #in string context, we get a regex
+  ok(_strip_regex_bloat( "$er" ) eq _strip_regex_bloat( qr/$er/ ) );
+}
 
 my $sr = Number::Range::Regex::SimpleRange->new( 2,44 );
 ok($sr); #boolean context
-ok("$sr" eq "2..44"); #string context
 ok( !/^$sr$/ ) for( 0,1,45 ); #regex context
 ok( /^$sr$/ ) for( 2..44 ); #regex context (part 2)
 ok( !$sr->contains($_) ) for( 0,1,45 ); #as an object
 ok( $sr->contains($_) ) for( 2..44 ); #as an object (part 2)
-my $sr_re = qr/^$sr$/;
-ok($sr_re ne "2..44"); #make sure we don't get the rangestring as regex
+if( has_regex_overloading() ) {
+  ok("$sr" eq $sr->to_string()); #string context
+  ok($sr->to_string() ne qr/$sr/); #make sure we don't get the rangestring as regex
+} else {
+  ok("$sr" ne $sr->to_string()); #in string context, we get a regex
+  ok(_strip_regex_bloat( "$sr" ) eq _strip_regex_bloat( qr/$sr/ ) );
+}
 
 my $tr = Number::Range::Regex::TrivialRange->new( 130, 179, '1[3-7]\d' );
 ok($tr); #boolean context
-ok("$tr" eq "130..179"); #string context
 ok( !/^$tr$/ ) for( 129,180 ); #regex context
 ok( /^$tr$/ ) for( 130..179 ); #regex context (part 2)
 ok( !$tr->contains($_) ) for( 129,180 ); #as an object
 ok( $tr->contains($_) ) for( 130..179 ); #as an object (part 2)
-my $tr_re = qr/^$tr$/;
-ok($tr_re ne "130..179"); #make sure we don't get the rangestring as regex
+if( has_regex_overloading() ) {
+  ok("$tr" eq $tr->to_string()); #string context
+  ok($tr->to_string() ne qr/$tr/); #make sure we don't get the rangestring as regex
+} else {
+  ok("$tr" ne $tr->to_string()); #in string context, we get a regex
+  ok(_strip_regex_bloat( "$tr" ) eq _strip_regex_bloat( qr/$tr/ ) );
+}
 
 my $cr = rangespec( "2..15,111..137" );
 ok($cr); #boolean context
-ok("$cr" eq "2..15,111..137"); #string context
 ok( !/^$cr$/ ) for( 1,16..110,138 ); #regex context
 ok( /^$cr$/ ) for( 2..15,111..137 ); #regex context (part 2)
 ok( !$cr->contains($_) ) for( 1,16..110,138 ); #as an object
 ok( $cr->contains($_) ) for( 2..15,111..137 ); #as an object (part 2)
-my $cr_re = qr/^$cr$/;
-ok($cr_re ne "2..15,111..137"); #make sure we don't get the rangestring as regex
+if( has_regex_overloading() ) {
+  ok("$cr" eq $cr->to_string()); #string context
+  ok($cr->to_string() ne qr/$cr/); #make sure we don't get the rangestring as regex
+} else {
+  ok("$cr" ne $cr->to_string()); #in string context, we get a regex
+  ok(_strip_regex_bloat( "$cr" ) eq _strip_regex_bloat( qr/$cr/ ) );
+}

@@ -20,10 +20,9 @@ use base 'Exporter';
 @EXPORT = qw( range rangespec );
 @EXPORT_OK =  qw( init range rangespec regex_range );
 
-$VERSION = '0.12';
+$VERSION = '0.13';
 
-my $default_opts = $Number::Range::Regex::Range::default_opts;
-my $init_opts = $default_opts;
+my $init_opts;
 
 sub features {
   return { negative => 0 };
@@ -37,7 +36,7 @@ sub init {
              (@opts % 2 == 0) ? @opts :
              die 'usage: init( $options_ref )';
 
-  $init_opts = $default_opts;
+  $init_opts = $Number::Range::Regex::Range::default_opts;
   # override any values of init_opts that were passed to init
   while (my ($key, $value) = each %opts) {
     $init_opts->{$key} = $value;
@@ -162,20 +161,155 @@ Number::Range::Regex - create regular expressions that check for
 
 =head1 DESCRIPTION
 
-which is more legible - this?
+Number::Range::Regex lets you manage sets of integers and generate
+regular expressions matching them. For example, here is one way
+to match number ranges in a regular expression:
 
   $date =~ m/^0*(?:[1-9]|[12][0-9]|3[01])\/0*(?:[0-9]|1[012])$/;
 
-or this?
+here is another:
 
   my $day_range = range(1, 31);
   my $month_range = range(1, 12);
   $date =~ m/^$day_range\/$month_range$/;
 
-(bonus points if you spotted the bug)
+which is more legible? (bonus points if you spotted the bug)
 
+
+=head1 METHODS
+
+=head2 RANGE CREATION
+
+=over
+
+=item range
+
+  $range = range( MIN, MAX );
+
+Create a range between the first argument and the last. For example,
+the range above will correspond to 8, 9, 10, 11, and 12. This method
+is exported by default.
+
+=item rangespec
+
+  $range = rangespec( '8..12,14,19..22' );
+
+Create a "compound" range given the range specification passed. For
+example, the range above would consist of 8, 9, 10, 11, 12, 14, 19,
+20, 21, and 22. This method is exported by default.
+
+=back
+
+=head2 RANGE DISPLAY
+
+=over
+
+=item to_string
+
+  $range->to_sting();
+
+Return a compact representation of the range suitable for consumption
+by a human, perl(1), or rangespec(). For example:
+
+  $range = range( 6, 22 );
+  print $range->to_string;
+
+will output: "6..22", which can be parsed by perl(1) or rangespec().
+
+=item regex
+
+  $range->regex();
+
+Return a regular expression matching members of this range. For example:
+
+  $range = range( 6, 22 );
+  print $range->regex;
+
+will output something equivalent to:
+
+  qr/0*(?:[6-9]|1\d|2[0-2])/
+
+which, on my machine with perl v5.14.2 and a development version of
+Number::Range::Regex between v0.12 and v0.13, is:
+
+  (?^:(?# begin Number::Range::Regex::SimpleRange[6..22] )[+]?0*(?:(?^:[6-9])|(?^:1\d)|(?^:2[0-2]))(?# end Number::Range::Regex::SimpleRange[6..22] ))
+
+=back
+
+=head2 OVERLOADING
+
+=over
+
+Please note that range objects are overloaded so that in regex
+context, $range will be equivalent to $range->regex(). This
+works in all versions of perl >= v5.6.0. When it is further
+possible to distinguish regex context from string context (as
+in overload v1.10 or higher, available in perl >= v5.12.0),
+range objects will display in string context as the terser
+$range->to_string() instead. 
+
+=back
+
+=head2 SET OPERATIONS
+
+=over
+
+given $range2 = rangespec( '0,2,4,6,8' ) and
+      $range3 = rangespec( '0,3,6,9' )
+
+=item union
+
+  $range = $range2->union( $range3 );
+
+Return the union of one range with another. In the example above,
+$range would consist of: 0, 2, 3, 4, 6, 8, and 9.
+
+=item intersect
+
+  $range = $range2->intersect( $range3 );
+
+Return the intersection of one range with another. In the example
+above, $range would consist of: 0 and 6. This method is also available
+via the alias intersection.
+
+=item xor
+
+  $range = $range->xor( $another_range );
+
+Return the symmetric difference of $range2 and $range3. In the example
+above, $range would consist of 2, 3, 4, 8, and 9.
+
+=item subtract
+
+  $range = $range2->subtract( $range3 );
+
+Return the relative complement of $range2 in $range3. In the example
+above, $range would consist of: 2, 4, and 8. Note carefully that
+this method is not symmetric - $range3->subtract( $range2 ) would be
+a different range consisting of 3 and 9. This method is also
+available via the aliases subtraction and minus.
+
+=back
+
+=head2 OTHER METHODS
+
+=over
+
+=item regex_range [ DEPRECATED ]
+
+  $regex = regex_range( MIN, MAX );
+
+This is a shortcut for range( MIN, MAX )->regex(). Useful for
+one-off use when overload.pm does not support regex context.
+This method is deprecated, and may disappear with the next
+release of Number::Range::Regex. This method is not exported
+by default.
+
+=back
 
 =head1 NOTES
+
+Non-negative integers only for now.
 
 It's usually better to check for number-ness only in the regular
 expression and verify the range of the number separately, eg:
@@ -185,11 +319,6 @@ but it's not always practical to refactor in that way.
 If you like one-liners, something like the following may suit you...
   m{^${\( range(1, 31) )}\/${\( range(1, 12) )}$}
 but, for readability's sake, please don't do that!
-
-
-=head1 NOTES
-
-Non-negative integers only for now.
 
 
 =head1 BUGS AND LIMITATIONS

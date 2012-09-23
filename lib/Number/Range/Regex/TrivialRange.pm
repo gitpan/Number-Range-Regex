@@ -22,7 +22,7 @@ use base 'Exporter';
 
 use Number::Range::Regex::SimpleRange;
 
-$VERSION = '0.12';
+$VERSION = '0.13';
 
 sub new {
   my ($class, $min, $max, $regex) = @_;
@@ -31,7 +31,7 @@ sub new {
 
 sub regex {
   my ($self, $opts) = @_;
-  return $self->{regex};
+  return qr/$self->{regex}/;
 }
 
 # touches/union/intersect/subtract inherit from SimpleRange.pm

@@ -14,7 +14,7 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter );
 
-$VERSION = '0.12';
+$VERSION = '0.13';
 
 use overload bool => \&in_range,
              '""' => sub { return $_[0] };

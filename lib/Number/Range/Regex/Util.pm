@@ -13,9 +13,20 @@ eval { require warnings; }; #it's ok if we can't load warnings
 require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter );
-@EXPORT = @EXPORT_OK = qw ( most min max multi_union option_mangler );
+@EXPORT = @EXPORT_OK = qw ( most min max multi_union
+                            option_mangler has_regex_overloading );
 
-$VERSION = '0.12';
+$VERSION = '0.13';
+
+require overload;
+sub has_regex_overloading {
+  # http://www.gossamer-threads.com/lists/perl/porters/244314 
+  # http://search.cpan.org/~jesse/perl-5.12.0/pod/perl5120delta.pod#qr_overload$ 
+  # 1.08, 1.09 are too low. 1.10: works 
+  # http://search.cpan.org/~jesse/perl-5.11.1/lib/overload.pm
+  return defined $overload::VERSION && $overload::VERSION > '1.09';
+}
+
 
 sub min { return most( sub { $_[0] < $_[1] }, @_ ); }
 

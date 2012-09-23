@@ -1,6 +1,8 @@
 Changes
 MANIFEST
+META.yml
 Makefile.PL
+README
 lib/Number/Range/Regex.pm
 lib/Number/Range/Regex/Range.pm
 lib/Number/Range/Regex/CompoundRange.pm
@@ -21,4 +23,3 @@ t/08-setops.t
 t/09-iterator.t
 t/10-extra.t
 t/_nrr_test_util.pm
-META.yml                                 Module meta-data (added by MakeMaker)

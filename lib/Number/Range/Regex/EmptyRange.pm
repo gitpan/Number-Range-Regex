@@ -15,11 +15,7 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.12';
-
-use overload bool => sub { return $_[0] },
-             '""' => \&to_string,
-             'qr' => \&regex;
+$VERSION = '0.13';
 
 sub new {
   my ($class) = @_;

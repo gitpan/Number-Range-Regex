@@ -15,11 +15,7 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.12';
-
-use overload bool => sub { return $_[0] },
-             '""' => \&to_string,
-             'qr' => \&regex;
+$VERSION = '0.13';
 
 sub new {
   my ($class, @ranges) = @_;
@@ -47,7 +43,9 @@ sub regex {
   my $opts = option_mangler( $passed_opts );
 
   my $separator = $opts->{readable} ? ' | ' : '|';
-  my $regex_str = join $separator, map { $_->regex() } @{$self->{ranges}};
+  my $regex_str = join $separator,
+      map { $_->regex( { %$opts, comment => 0 } ) }
+      @{$self->{ranges}};
   $regex_str = " $regex_str " if $opts->{readable};
 
   my $modifier_maybe = $opts->{readable} ? '(?x)' : '';

@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Number-Range-Regex
-version:            0.12
+version:            0.13
 abstract:           ~
 author:  []
 license:            unknown
@@ -9,7 +9,8 @@ configure_requires:
     ExtUtils::MakeMaker:  0
 build_requires:
     ExtUtils::MakeMaker:  0
-requires:  {}
+requires:
+    overload:  0
 no_index:
     directory:
         - t

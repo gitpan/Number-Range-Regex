@@ -7,7 +7,7 @@
 package Number::Range::Regex::Range;
 
 use strict;
-use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION ); 
+use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION $default_opts ); 
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
@@ -17,10 +17,11 @@ use base 'Exporter';
 use Number::Range::Regex::EmptyRange;
 use Number::Range::Regex::SimpleRange;
 use Number::Range::Regex::CompoundRange;
+use Number::Range::Regex::Util;
 
-$VERSION = '0.12';
+$VERSION = '0.13';
 
-our $default_opts = {
+$default_opts = {
   allow_wildcard => 0,
   autoswap       => 0,
 
@@ -29,6 +30,18 @@ our $default_opts = {
   comment           => 1,
   readable          => 0,
 };
+
+use overload bool => sub { return $_[0] },
+             '""' => sub { return $_[0]->overload_string() },
+             'qr' => sub { return $_[0]->regex() };
+
+sub overload_string {
+  my ($self) = @_;
+  $self->{has_regex_overloading} = has_regex_overloading()  unless  defined $self->{has_regex_overloading}; # be cheap, save some sub calls
+  # if we can distinguish regex from string context, then return a
+  # human-friendly format. otherwise, return the (probably hairy) regex
+  return $self->{has_regex_overloading} ? $self->to_string() : $self->regex();
+}
 
 sub iterator {
   my ($self) = @_;        

@@ -1,5 +1,20 @@
 Revision history for Perl extension Number::Range::Regexp
 
+0.13  Sep 22 22:21:07 EDT 2012 r2970
+   - graceful but ugly degradation: string context will give regex()
+     output when overload can't distinguish between regex and string
+     context (overload < v1.10, or equivalently, perl < v5.12)
+   - more readable, less verbose CompoundRange regex commenting
+       (since we include the CompoundRange::to_string() output,
+       don't need it from each SimpleRange therein)
+   - overhaul POD, documenting all functionality
+   - support perl 5.6.x
+   - overload.pm now required since it's been available with perl
+     since 5.5.x or earlier)
+   - regex_range() deprecated
+   - add META.yml, README
+   - less verbose regex commenting for CompoundRanges
+
 0.12  Sep 21 00:36:38 EDT 2012 r2945
    -  overload ranges such that ->regex() and ->to_string() are implied
       depending on context (in a regex or string respectively), update

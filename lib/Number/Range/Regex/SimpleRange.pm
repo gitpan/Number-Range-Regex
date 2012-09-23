@@ -20,11 +20,7 @@ use Number::Range::Regex::CompoundRange;
 use Number::Range::Regex::TrivialRange;
 use Number::Range::Regex::Util;
 
-$VERSION = '0.12';
-
-use overload bool => sub { return $_[0] },
-             '""' => \&to_string,
-             'qr' => \&regex;
+$VERSION = '0.13';
 
 sub new {
   my ($class, $min, $max, $passed_opts) = @_;
