@@ -7,6 +7,7 @@ lib/Number/Range/Regex.pm
 lib/Number/Range/Regex/Range.pm
 lib/Number/Range/Regex/CompoundRange.pm
 lib/Number/Range/Regex/EmptyRange.pm
+lib/Number/Range/Regex/InfiniteRange.pm
 lib/Number/Range/Regex/SimpleRange.pm
 lib/Number/Range/Regex/TrivialRange.pm
 lib/Number/Range/Regex/Iterator.pm
@@ -21,5 +22,6 @@ t/06-range-usage.t
 t/07-trivialrange-usage.t
 t/08-setops.t
 t/09-iterator.t
-t/10-extra.t
+t/10-infiniteranges.t
 t/_nrr_test_util.pm
+META.json                                Module JSON meta-data (added by MakeMaker)

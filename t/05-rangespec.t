@@ -13,7 +13,7 @@ use Number::Range::Regex qw ( range rangespec );
 
 my ($r, $re);
 
-plan tests => $^V ge v5.8.0 ? 115 : 114;
+plan tests => $^V ge v5.8.0 ? 117 : 116;
 
 $r = range( 3, 4 );
 ok(check_type($r, 'Simple'));
@@ -102,3 +102,7 @@ ok( $_ !~ /^$re$/ ) for ( 2,7..8,12 );
 ok($r->contains($_)) for (3..6,9..11);
 ok(!$r->contains($_)) for (2,7..8,12);
 
+# allow whitespace in rangespecs
+$r = rangespec( "3..6, 9..11" );
+ok(check_type($r, 'Compound'));
+ok($r->to_string() eq '3..6,9..11');

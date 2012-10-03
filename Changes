@@ -1,5 +1,16 @@
 Revision history for Perl extension Number::Range::Regexp
 
+0.20 Oct  3 17:34:01 EDT 2012 r3074
+   - fairly complete implementation - just missing intersect/subtract/xor
+     on compound, infinite ranges.
+   - support for negative integers
+   - proper support for infinite ranges in all codepaths
+   - new set operation: not()/invert()
+   - allow whitespace in rangespecs: "3..5,7..9" == "3..5, 7..9"
+   - fix regex_range() with options before call to init()
+   - document NRR::Iterator, add $iterator->seek( number )
+   - various under the hood improvements wrt maintenance
+
 0.13  Sep 22 22:21:07 EDT 2012 r2970
    - graceful but ugly degradation: string context will give regex()
      output when overload can't distinguish between regex and string

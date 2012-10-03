@@ -14,12 +14,14 @@ require Exporter;
 use base 'Exporter';
 @ISA = qw( Exporter );
 
-use Number::Range::Regex::EmptyRange;
-use Number::Range::Regex::SimpleRange;
-use Number::Range::Regex::CompoundRange;
-use Number::Range::Regex::Util;
+$VERSION = '0.20';
 
-$VERSION = '0.13';
+use Number::Range::Regex::CompoundRange;
+use Number::Range::Regex::EmptyRange;
+use Number::Range::Regex::InfiniteRange;
+use Number::Range::Regex::SimpleRange;
+use Number::Range::Regex::TrivialRange;
+use Number::Range::Regex::Util;
 
 $default_opts = {
   allow_wildcard => 0,
@@ -51,14 +53,27 @@ sub iterator {
 sub new { die "called abstract Range->new() on a ".ref($_[0]) }
 sub to_string { die "called abstract Range->to_string() on a ".ref($_[0]) }
 sub regex { die "called abstract Range->regex() on a ".ref($_[0]) }
-sub intersect { intersection(@_); }
-sub intersection { die "called abstract Range->intersection() on a ".ref($_[0]) }
 sub union { die "called abstract Range->union() on a ".ref($_[0]) }
-sub touches { die "called abstract Range->touches() on a ".ref($_[0]) }
-sub minus { subtract(@_); }
-sub subtraction { subtract(@_); }
+sub intersect { shift->intersection(@_); }
+sub intersection { die "called abstract Range->intersection() on a ".ref($_[0]) }
+sub minus { shift->subtract(@_); }
+sub subtraction { shift->subtract(@_); }
 sub subtract { die "called abstract Range->subtract() on a ".ref($_[0]) }
+sub xor { die "called abstract Range->xor() on a ".ref($_[0]) }
+sub not { shift->invert(@_); }
+## relative complemet == subtraction, absolute complement == invert
+## but it probably will cause more confusion to include this than not
+#sub complement {
+#  my ($self, $other) = @_;
+#  return $self->subtract( $other )  if  $other;
+#  return $self->invert();
+#}
+sub invert { die "called abstract Range->invert() on a ".ref($_[0]) }
+sub touches { die "called abstract Range->touches() on a ".ref($_[0]) }
 sub contains { die "called abstract Range->contains() on a ".ref($_[0]) }
+sub has_lower_bound { die "called abstract Range->has_lower_bound() on a ".ref($_[0]) }
+sub has_upper_bound { die "called abstract Range->has_upper_bound() on a ".ref($_[0]) }
+
 
 1;
 

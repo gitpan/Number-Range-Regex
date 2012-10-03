@@ -20,9 +20,9 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::SimpleRange );
 
-use Number::Range::Regex::SimpleRange;
+$VERSION = '0.20';
 
-$VERSION = '0.13';
+use Number::Range::Regex::SimpleRange;
 
 sub new {
   my ($class, $min, $max, $regex) = @_;

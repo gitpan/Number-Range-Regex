@@ -15,17 +15,8 @@ if( has_regex_overloading() ) {
   plan tests => 492;
 } else {
   plan tests => 492;
-  diag "NOTE: overloading in regex context requires overload.pm version >= 1.10, will always overload as string";
-}
-
-sub _strip_regex_bloat {
-  my $str = (@_);
-  # depending on the version of perl, we may get one or more
-  # (?-xism: ... ) wrappers around the regex
-  while($str =~ /^\(\?\-xism\:/) {
-    $str = substr($str, 8, -1) 
-  }
-  return $str;
+  my $yours = defined $overload::VERSION ? $overload::VERSION : '[unversioned]';
+  diag "NOTE: overloading in regex context requires overload.pm version >= 1.10 (yours is $yours), will always overload as string";
 }
 
 my $er = Number::Range::Regex::EmptyRange->new();
@@ -37,7 +28,7 @@ if( has_regex_overloading() ) {
   ok($er->to_string() ne qr/$er/); #make sure we don't get the empty string as regex
 } else {
   ok("$er" ne $er->to_string()); #in string context, we get a regex
-  ok(_strip_regex_bloat( "$er" ) eq _strip_regex_bloat( qr/$er/ ) );
+  ok(strip_regex_bloat( "$er" ) eq strip_regex_bloat( qr/$er/ ) );
 }
 
 my $sr = Number::Range::Regex::SimpleRange->new( 2,44 );
@@ -51,7 +42,7 @@ if( has_regex_overloading() ) {
   ok($sr->to_string() ne qr/$sr/); #make sure we don't get the rangestring as regex
 } else {
   ok("$sr" ne $sr->to_string()); #in string context, we get a regex
-  ok(_strip_regex_bloat( "$sr" ) eq _strip_regex_bloat( qr/$sr/ ) );
+  ok(strip_regex_bloat( "$sr" ) eq strip_regex_bloat( qr/$sr/ ) );
 }
 
 my $tr = Number::Range::Regex::TrivialRange->new( 130, 179, '1[3-7]\d' );
@@ -65,7 +56,7 @@ if( has_regex_overloading() ) {
   ok($tr->to_string() ne qr/$tr/); #make sure we don't get the rangestring as regex
 } else {
   ok("$tr" ne $tr->to_string()); #in string context, we get a regex
-  ok(_strip_regex_bloat( "$tr" ) eq _strip_regex_bloat( qr/$tr/ ) );
+  ok(strip_regex_bloat( "$tr" ) eq strip_regex_bloat( qr/$tr/ ) );
 }
 
 my $cr = rangespec( "2..15,111..137" );
@@ -79,5 +70,5 @@ if( has_regex_overloading() ) {
   ok($cr->to_string() ne qr/$cr/); #make sure we don't get the rangestring as regex
 } else {
   ok("$cr" ne $cr->to_string()); #in string context, we get a regex
-  ok(_strip_regex_bloat( "$cr" ) eq _strip_regex_bloat( qr/$cr/ ) );
+  ok(strip_regex_bloat( "$cr" ) eq strip_regex_bloat( qr/$cr/ ) );
 }

@@ -27,6 +27,15 @@ sub check_type {
   return $ret;
 }
 
+sub strip_regex_bloat {
+  my $str = (@_);
+  # depending on the version of perl, we may get one or more
+  # (?-xism: ... ) wrappers around the regex
+  while($str =~ /^\(\?\-xism\:/) {
+    $str = substr($str, 8, -1)
+  }
+  return $str;
+}
 
 sub test_rangeobj_exhaustive {
   my ($tr) = @_;

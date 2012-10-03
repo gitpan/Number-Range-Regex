@@ -7,16 +7,18 @@
 package Number::Range::Regex::Util;
 
 use strict;
-use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION ); 
+use vars qw ( @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $VERSION ); 
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter );
-@EXPORT = @EXPORT_OK = qw ( most min max multi_union
-                            option_mangler has_regex_overloading );
+@EXPORT = qw ( most min max multi_union
+               option_mangler has_regex_overloading );
+@EXPORT_OK = qw ( _sort_by_min ) ;
+%EXPORT_TAGS = ( all => [ @EXPORT, @EXPORT_OK ] );
 
-$VERSION = '0.13';
+$VERSION = '0.20';
 
 require overload;
 sub has_regex_overloading {
@@ -27,19 +29,21 @@ sub has_regex_overloading {
   return defined $overload::VERSION && $overload::VERSION > '1.09';
 }
 
-
-sub min { return most( sub { $_[0] < $_[1] }, @_ ); }
-
-sub max { return most( sub { $_[0] > $_[1] }, @_ ); }
-
-sub most {
+sub most(&@) {
   my ($condition, $first, @rest) = @_;
   my $most = $first;
   foreach my $o (@rest) {
-    $most = $o  if  $condition->($o, $most);
+    local ($a, $b) = ($o, $most);
+    $most = $o  if  $condition->();
   }
   return $most; 
 }
+
+#sub min { return most( sub { $a < $b }, @_ ) }
+sub min { return most { $a < $b } @_ }
+
+#sub max { return most( sub { $a > $b }, @_ ) }
+sub max { return most { $a > $b } @_ }
 
 sub multi_union {
   my @ranges = @_;
@@ -63,6 +67,11 @@ sub option_mangler {
     $opts = $Number::Range::Regex::Range::default_opts;
   }
   return $opts;
+}
+
+sub _sort_by_min {
+  my ($a, $b) = @_;
+  return ($a->{min} < $b->{min}) ? ($a, $b) : ($b, $a);
 }
 
 1;

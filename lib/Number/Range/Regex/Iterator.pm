@@ -14,105 +14,172 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter );
 
-$VERSION = '0.13';
+$VERSION = '0.20';
 
 use overload bool => \&in_range,
              '""' => sub { return $_[0] };
+
+# fields in %$self:
+# ranges           : arrayref of the subranges involved
+# out_of_range     : whether the iterator's current state is
+#                        out of range (advanced beyond the last
+#                        element or before the first one) or not.
+#                        if true, will be either "underflow" or
+#                        "overflow" accordingly
+# number           : the number currently pointed to
+# rangenum         : which subrange is the number in?
+# rangepos_left    : the offset between number and the leftmost
+#                        element of this subrange
+# rangepos_right   : the offset between number and the rightmost
+#                        element of this subrange
 
 sub new {
   my ($class, $range) = @_;
 
   my $self = bless { range => $range }, $class; 
 
+  if(!$range->isa('Number::Range::Regex::Range')) {
+    die "unknown arg: $range, usage: Iterator->new( \$range )";
+  }
   if($range->isa('Number::Range::Regex::CompoundRange')) {
     $self->{ranges} = $range->{ranges};
-  } elsif($range->isa('Number::Range::Regex::SimpleRange')) {
-    $self->{ranges} = [ $range ];
   } elsif($range->isa('Number::Range::Regex::EmptyRange')) {
     die "can't iterate over an empty range";
-  } else {
-    die "unknown arg: $range, usage: Iterator->new( \$range )";
+  } else { #SimpleRange or InfiniteRange
+    $self->{ranges} = [ $range ];
   } 
 
-  foreach my $range ( @{$self->{ranges}} ) {
-    $self->{size} += $range->{max} - $range->{min} + 1;
-  }
-  $self->first();
+  $self->first()  if  defined $self->{ranges}->[0]->{min};
 
   return $self; 
 }
 
+sub size {
+  my ($self) = @_;
+  return undef          if  !defined $self->{ranges}->[0]->{min};
+  return undef          if  !defined $self->{ranges}->[-1]->{max};
+  return $self->{size}  if  defined $self->{size};
+  foreach my $sr ( @{$self->{ranges}} ) {
+    $self->{size} += $sr->{max} - $sr->{min} + 1;
+  }
+  return $self->{size};
+}
+
+sub seek {
+  my ($self, $number) = @_;
+  my $n;
+  for($n = 0 ; $n < @{$self->{ranges}}; $n++ ) {
+    my $sr = $self->{ranges}->[$n];
+    if($sr->contains($number)) {
+      $self->{number}       = $number;
+      $self->{rangenum}     = $n;
+      $self->{out_of_range} = 0;
+      if(defined $sr->{min}) {
+        $self->{rangepos_left}  = $number - $sr->{min};
+      }
+      if(defined $sr->{max}) {
+        $self->{rangepos_right} = $sr->{max} - $number;
+      }
+      last;
+    }
+  }
+  if($n == @{$self->{ranges}}) {
+    die "can't seek() - range '".$self->{range}->to_string."' does not contain '$number'";
+  }
+  return $self;
+}
+
 sub first {
   my ($self) = @_;
-  $self->{number}       = $self->{ranges}->[0]->{min};
-  $self->{offset}       = 0;
-  $self->{rangenum}     = 0;
-  $self->{rangepos}     = 0;
+  my $first_r = $self->{ranges}->[0];
+  die "can't first() an iterator with no lower bound"  unless  defined $first_r->{min};
+  $self->{number}         = $first_r->{min};
+  $self->{rangenum}       = 0;
+  if(defined $first_r->{min}) {
+    $self->{rangepos_left}  = 0;
+    if(defined $first_r->{max}) {
+      $self->{rangepos_right} = $first_r->{max} - $first_r->{min};
+    }
+  }
   $self->{out_of_range} = 0;
   return $self; 
 }
 
 sub last {
   my ($self) = @_;
-  my $last_tr = $self->{ranges}->[-1];
-  $self->{number}       = $last_tr->{max};
-  $self->{offset}       = $self->{size}-1;
+  my $last_r = $self->{ranges}->[-1];
+  die "can't last() an iterator with no upper bound"  unless  defined $last_r->{max};
+  $self->{number}       = $last_r->{max};
   $self->{rangenum}     = $#{$self->{ranges}};
-  $self->{rangepos}     = $last_tr->{max} - $last_tr->{min};
+  if(defined $last_r->{max}) {
+    $self->{rangepos_right} = 0;
+    if(defined $last_r->{min}) {
+      $self->{rangepos_left} = $last_r->{max} - $last_r->{min};
+    }
+  }
   $self->{out_of_range} = 0;
   return $self; 
 }
 
 sub fetch {
   my ($self) = @_;
+  die "can't fetch() an iterator before positioning it using first/last/seek"  if  !defined $self->{number};
   die "can't fetch() an out of range ($self->{out_of_range}) iterator"  if  $self->{out_of_range};
   return $self->{number};
 }
 
 sub next {
   my ($self) = @_;
+  die "can't next() an iterator before positioning it using first/last/seek"  if  !defined $self->{number};
   die "can't next() an out of range ($self->{out_of_range}) iterator"  if  $self->{out_of_range};
 
-  if($self->{number} == $self->{ranges}->[-1]->{max}) {
-    $self->{out_of_range} = 'overflow';
-    return $self;
-  }
-
-#warn "next: number: $self->{number}, offset: $self->{offset}, rangenum: $self->{rangenum}, rangepos: $self->{rangepos}\n";
-  $self->{offset}++;
-  my $this_tr = $self->{ranges}->[ $self->{rangenum} ];
-  if( $self->{rangepos} < $this_tr->{max} - $this_tr->{min} ) {
-    $self->{rangepos}++;
+#_dbg($self, "pre-next:  ");
+  my $this_r = $self->{ranges}->[ $self->{rangenum} ];
+  if( defined $this_r->{max} ? $self->{number} < $this_r->{max} : 1 ) {
+    $self->{rangepos_left}++   if  defined $self->{rangepos_left};
+    $self->{rangepos_right}--  if  defined $self->{rangepos_right};
     $self->{number}++;
   } else {
     $self->{rangenum}++;
-    $self->{rangepos} = 0;
-    $self->{number} = $self->{ranges}->[ $self->{rangenum} ]->{min};
+    my $new_r = $self->{ranges}->[ $self->{rangenum} ];
+    $self->{rangepos_left} = 0;
+    if(defined $new_r->{max}) { #min must be defined - this is the next one up
+      $self->{rangepos_right} = $new_r->{max} - $new_r->{min};
+    }
+    if($self->{rangenum} == @{$self->{ranges}}) {
+      $self->{out_of_range} = 'overflow';
+      return $self;
+    }
+    $self->{number} = $new_r->{min};
   }
-  return $self;
+#_dbg($self, "post-next: ");
+  return $self; 
 }
 
 sub prev {
   my ($self) = @_;
+  die "can't prev() an iterator before positioning it using first/last/seek"  if  !defined $self->{number};
   die "can't prev() an out of range ($self->{out_of_range}) iterator"  if  $self->{out_of_range};
 
-  if($self->{offset} == 0) {
-    $self->{out_of_range} = 'underflow';
-    return $self;
-  }
-
-#warn "prev: number: $self->{number}, offset: $self->{offset}, rangenum: $self->{rangenum}, rangepos: $self->{rangepos}\n";
-  $self->{offset}--;
-  if( $self->{rangepos} > 0 ) {
-    $self->{rangepos}--;
+#_dbg($self, "pre-prev:  ");
+  my $this_r = $self->{ranges}->[ $self->{rangenum} ];
+  if( defined $this_r->{min} ? $self->{number} > $this_r->{min} : 1 ) {
+    $self->{rangepos_left}--   if  defined $self->{rangepos_left};
+    $self->{rangepos_right}++  if  defined $self->{rangepos_right};
     $self->{number}--;
   } else {
     $self->{rangenum}--;
-    my $tr = $self->{ranges}->[ $self->{rangenum} ];
-    $self->{rangepos} = $tr->{max} - $tr->{min};
-    $self->{number} = $tr->{max};
+    my $new_r = $self->{ranges}->[ $self->{rangenum} ];
+    $self->{rangepos_left} = $new_r->{max} - $new_r->{min};
+    $self->{rangepos_right} = 0;
+    if($self->{rangenum} == -1) {
+      $self->{out_of_range} = 'underflow';
+      return $self;
+    }
+    $self->{number} = $new_r->{max};
   }
-  return $self;
+#_dbg($self, "post-prev: ");
+  return $self; 
 }
 
 sub in_range {
@@ -120,5 +187,146 @@ sub in_range {
   return ! $self->{out_of_range};
 }
 
+sub _dbg {
+  my ($self, $ident) = @_;
+  my $str = $ident;
+  for my $key ( qw ( number rangenum rangepos_left rangepos_right ) ) {
+    my $val = $self->{$key};
+    $val = "[undef]" unless defined $val;
+    $str .= " $key: $val,";
+  }
+  $str =~ s/,$//;
+  warn "$str\n"; 
+}
+
 1;
+
+__END__
+
+=head1 NAME
+
+Number::Range::Regex::Iterator - create iterators for Number::Range::Regex
+objects
+
+=head1 SYNOPSIS
+
+  use Number::Range::Regex;
+  my $it = rangespec( '-5..-3,3..5' )->iterator();
+
+  $it->first();
+  do {
+    do_something_with_value( $it->fetch );
+  } while ($it->next);
+
+  $it->last();
+  do {
+    do_something_with_value( $it->fetch );
+  } while ($it->prev);
+
+
+=head1 METHODS
+
+=over
+
+=item new
+
+  $it = Number:Range::Regex::Iterator->new( $range );
+
+given a range, return an iterator that returns its members.
+note that this is identical to the more compact, usual form:
+
+  $range->iterator()
+
+=item fetch
+
+return the integer currently pointed to by the iterator.
+
+=item first
+
+  $range->first();
+
+set the iterator to point at its lowest value. first() will throw
+an error if called on a range with no lower bound, for example:
+
+  range( undef, $n )->iterator->first;
+
+=item last
+
+  $range->last();
+
+set the iterator to point at its greatest value. last() will throw
+an error if called on a range with no upper bound, for example:
+
+  rangespec( '3..inf' )->iterator->first;
+
+=item next
+
+point to the next greatest integer that is part of $range.
+often this value will be one greater, but in the case of
+compound ranges, it will not always. consider:
+
+  my $it = range( '4,22..37' )->iterator;
+  $it->first; # $it->fetch == 4
+  $it->next;  # $it->fetch == 22
+
+=item prev
+
+  $range->prev()
+
+point to the next smallest integer that is part of $range.
+often this value will be one smaller, but not always:
+
+  my $it = range( '22..37,44' )->iterator;
+  $it->last; # $it->fetch == 44
+  $it->prev; # $it->fetch == 37
+
+=item seek
+
+  $range->iterator->seek( $n );
+
+set the iterator to point to the value $n in $range. that is:
+
+  $it->seek( $n )->fetch == $n
+
+if $n is not member of $range, seek() throws an error.
+
+=item size
+
+  $range->size();
+
+Returns the size of the iterator. If the iterator is unbounded,
+returns undef.
+
+=item in_range
+
+  $range->in_range();
+
+returns a boolean value indicating whether $range has been
+set to a valid position with any of the methods first, last,
+seek, prev, and next. returns false in e.g. the following
+circumstances:
+  $range->last->next;
+  $range->first->prev;
+  range( '3..4' )->first->next->next;
+  range( '3..4' )->last->prev->prev;
+
+=back
+
+=head1 BUGS AND LIMITATIONS
+
+Please report any bugs or feature requests through the
+web interface at L<http://rt.cpan.org>.
+
+=head1 AUTHOR
+
+Brian Szymanski  B<< <ski-cpan@allafrica.com> >> -- be sure to put
+Number::Range::Regex in the subject line if you want me to read
+your message.
+
+
+=head1 SEE ALSO
+
+Number::Range::Regex
+
+=cut
 

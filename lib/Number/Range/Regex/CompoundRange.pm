@@ -7,7 +7,7 @@
 package Number::Range::Regex::CompoundRange;
 
 use strict;
-use Number::Range::Regex::Util;
+
 use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION ); 
 eval { require warnings; }; #it's ok if we can't load warnings
 
@@ -15,14 +15,20 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.13';
+$VERSION = '0.20';
+
+use Number::Range::Regex::Util;
 
 sub new {
   my ($class, @ranges) = @_;
   # TODO: should/can we deduplicate here by calling union for each of @ranges?
-  my @sorted_ranges = sort { $a->{min} <=> $b->{min} } @ranges;
-  my $self = bless { ranges => [ @sorted_ranges ] }, $class;
-  return $self; 
+  my @sorted_ranges = sort { 
+    #return 0  if  !defined $a->{min} && !defined $b->{min}; #shouldnt happen
+    return -1  if  !defined $a->{min};
+    return 1  if  !defined $b->{min};
+    return $a->{min} <=> $b->{min}
+  } @ranges;
+  return bless { ranges => [ @sorted_ranges ] }, $class;
 }
 
 sub to_string {
@@ -58,27 +64,19 @@ sub regex {
   return qr/(?:$begin_comment_maybe$modifier_maybe(?:$regex_str)$end_comment_maybe)/; 
 }
 
-sub _sr_new_wrapper {
-  my ($min, $max) = @_;
-  $min = 0  if  $min < 0;
-  $max = 0  if  $max < 0;
-  die "internal error in _sr_new_wrapper"  if  $max < $min;
-  return Number::Range::Regex::SimpleRange->new( $min, $max );
-}
-
 sub _do_unequal_min {
   my ($lower, $upper, $ptr, $ranges) = @_;
   if( $lower->{max} > $upper->{max} ) {
     # 3 ranges, last of which may yet overlap
-    my $r1 = _sr_new_wrapper( $lower->{min}, $upper->{min}-1 );
+    my $r1 = Number::Range::Regex::SimpleRange->new( $lower->{min}, $upper->{min}-1 );
     my $r2 = $upper;
-    my $r3 = _sr_new_wrapper( $upper->{max}+1, $lower->{max} );
+    my $r3 = Number::Range::Regex::SimpleRange->new( $upper->{max}+1, $lower->{max} );
 #warn "l: $lower->{min}..$lower->{max} -> $r1->{min}..$r1->{max},$r2->{min}..$r2->{max},$r3->{min}..$r3->{max}";
     splice( @$ranges, $$ptr, 1, ($r1, $r2, $r3) );
     $$ptr += 2; # $r3 may overlap something else
   } elsif( $lower->{max} >= $upper->{min} ) {
     # 2 ranges, neither of which can overlap anything else
-    my $r1 = _sr_new_wrapper( $lower->{min}, $upper->{min}-1 );
+    my $r1 = Number::Range::Regex::SimpleRange->new( $lower->{min}, $upper->{min}-1 );
     my $r2 = $upper;
 #warn "l: $lower->{min}..$lower->{max} -> $r1->{min}..$r1->{max},$r2->{min}..$r2->{max}";
     splice( @$ranges, $$ptr, 1, ($r1, $r2 ) );
@@ -96,7 +94,7 @@ sub sectionify {
   my @s_ranges = @{$self->{ranges}};
   my @o_ranges = $other->isa('Number::Range::Regex::CompoundRange') ? @{$other->{ranges}} :
                  $other->isa('Number::Range::Regex::SimpleRange') ? ( $other ) :
-                 die "other is neither a simple nor complex range!";
+                 die "other is neither a simple nor compound range!";
 
 #warn "s_ranges1: ".join ",", map { "$_->{min}..$_->{max}" } @s_ranges;
 #warn "o_ranges1: ".join ",", map { "$_->{min}..$_->{max}" } @o_ranges;
@@ -122,14 +120,14 @@ sub sectionify {
       if( $this_s->{max} < $this_o->{max} ) {
         # 2 ranges, latter of which may yet overlap
         my $r1 = $this_s;
-        my $r2 = _sr_new_wrapper($this_s->{max}+1, $this_o->{max});
+        my $r2 = Number::Range::Regex::SimpleRange->new($this_s->{max}+1, $this_o->{max});
         splice( @s_ranges, $s_ptr, 1, ($r1, $r2) );
 #warn "s: $this_s->{min}..$this_s->{max} -> $r1->{min}..$r1->{max},$r2->{min}..$r2->{max}";
         $s_ptr++; # $r2 may overlap something else
       } elsif( $this_s->{max} > $this_o->{max} ) {
         # 2 ranges, latter of which may yet overlap
         my $r1 = $this_o;
-        my $r2 = _sr_new_wrapper($this_o->{max}+1, $this_s->{max});
+        my $r2 = Number::Range::Regex::SimpleRange->new($this_o->{max}+1, $this_s->{max});
         splice( @s_ranges, $s_ptr, 1, ($r1, $r2) );
 #warn "o: $this_o->{min}..$this_o->{max} -> $r1->{min}..$r1->{max},$r2->{min}..$r2->{max}";
         $s_ptr++; # $r2 may overlap something else
@@ -176,15 +174,12 @@ sub sectionify {
 }
 
 
-sub intersect { intersection(@_); }
 sub intersection {
   my ($self, $other) = @_;
   my $sections = $self->sectionify( $other );
   return multi_union( @{$sections->{in_both}} );
 }
 
-sub minus { subtract(@_); }
-sub subtraction { subtract(@_); }
 sub subtract {
   my ($self, $other) = @_; 
   my $sections = $self->sectionify( $other );
@@ -197,6 +192,32 @@ sub xor {
   return multi_union( @{$sections->{just_self}}, @{$sections->{just_other}} );
 }
 
+sub invert {
+  my ($self) = @_; 
+  my @included = sort {
+    return -1  if  !defined $a->{min};
+    return 1  if  !defined $b->{min};
+    return $a->{min} <=> $b->{min}
+  } @{$self->{ranges}};
+  my @excluded = ();
+  if(defined $included[0]->{min}) {
+    push @excluded, Number::Range::Regex::InfiniteRange->new_negative_infinity( $included[0]->{min}-1 );
+  }
+  for(my $c=1; $c<@included; ++$c) {
+    my $last = $included[$c-1];
+    my $this = $included[$c];
+    if($last->{max}+1 > $this->{min}-1) {
+      die "internal error - overlapping SRs?";
+    } else {
+      push @excluded, Number::Range::Regex::SimpleRange->new( $last->{max}+1, $this->{min}-1 );
+    }
+  }
+  if(defined $included[-1]->{max}) {
+    push @excluded, Number::Range::Regex::InfiniteRange->new_positive_infinity( $included[-1]->{max}+1 );
+  }
+  return Number::Range::Regex::CompoundRange->new( @excluded );
+}
+
 sub union {
   my ($self, @other) = @_;
   return multi_union( $self, @other )  if  @other > 1;
@@ -206,9 +227,14 @@ sub union {
   my @s_ranges = @{$self->{ranges}};
   my @o_ranges = $other->isa('Number::Range::Regex::CompoundRange') ? @{$other->{ranges}} :
                  $other->isa('Number::Range::Regex::SimpleRange') ? ( $other ) :
-                 die "other is neither a simple nor complex range!";
+                 $other->isa('Number::Range::Regex::InfiniteRange') ? ( $other ) :
+                 die "other is neither a simple nor compound range!";
 
-  if( $s_ranges[0]->{min} < $o_ranges[0]->{min} ) {
+  if(!defined $s_ranges[0]->{min}) {
+    @new_ranges = shift @s_ranges;
+  } elsif(!defined $o_ranges[0]->{min}) {
+    @new_ranges = shift @o_ranges;
+  } elsif( $s_ranges[0]->{min} < $o_ranges[0]->{min} ) {
     @new_ranges = shift @s_ranges;
   } else {
     @new_ranges = shift @o_ranges;
@@ -219,7 +245,11 @@ sub union {
 #warn "top loop new_ranges: ".join(" ", map { $_->regex } @new_ranges);
     if( defined $s_ranges[0] ) {
       if( defined $o_ranges[0] ) {
-        if( $s_ranges[0]->{min} < $o_ranges[0]->{min} ) {
+        if( !defined $s_ranges[0]->{min} ) {
+          $next_range = shift @s_ranges;
+        } elsif( !defined $o_ranges[0]->{min} ) {
+          $next_range = shift @o_ranges;
+        } elsif( $s_ranges[0]->{min} < $o_ranges[0]->{min} ) {
           $next_range = shift @s_ranges;
         } else {
           $next_range = shift @o_ranges;
@@ -237,10 +267,11 @@ sub union {
 
     if($next_range->touches($new_ranges[-1])) {
       my $last_range = pop @new_ranges;
-#warn "last_range: $last_range->{min}..$last_range->{max}";
-#warn "next_range: $next_range->{min}..$next_range->{max}";
+#warn "last_range: $last_range, next_range: $next_range";
       my $r_union = $next_range->union($last_range);
       if($r_union->isa('Number::Range::Regex::SimpleRange')) {
+        push @new_ranges, $r_union;
+      } elsif($r_union->isa('Number::Range::Regex::InfiniteRange')) {
         push @new_ranges, $r_union;
       } elsif($r_union->isa('Number::Range::Regex::CompoundRange')) {
         my @ranges = @{$r_union->{ranges}};
@@ -264,12 +295,13 @@ sub union {
 
 sub _collapse_ranges {
   my @ranges = @_;
-
+  my $last_r;
+  my $this_r = $ranges[0];
   for (my $rpos = 1; $rpos < @ranges; $rpos++ ) {
-    my $last_range = $ranges[$rpos-1];
-    my $this_range = $ranges[$rpos];
-    if($last_range->touches($this_range)) {
-      $ranges[$rpos] = $last_range->union($this_range);
+    $last_r = $this_r;
+    $this_r = $ranges[$rpos];
+    if($last_r->touches($this_r)) {
+      splice(@ranges, $rpos-1, 2, $last_r->union($this_r));
       $rpos--;
     }
   }
@@ -278,21 +310,32 @@ sub _collapse_ranges {
 
 sub _is_contiguous {
   my ($self) = @_;
-  my $pos = $self->{ranges}->[0]->{min};
-  foreach my $sr (@{$self->{ranges}}) {
-    # nothing to do if not contiguous
-    return  if  $pos != $sr->{min};
-    $pos = $sr->{max}+1;
+  my $last_r;
+  my $this_r = $self->{ranges}->[0];
+  for (my $rpos = 1; $rpos < @{$self->{ranges}}; $rpos++ ) {
+    $last_r = $this_r;
+    $this_r = $self->{ranges}->[$rpos];
+    return  if  $last_r->{max}+1 < $this_r->{min};
   }
   return ($self->{ranges}->[0]->{min}, $self->{ranges}->[-1]->{max});
 }
 
 sub contains {
   my ($self, $n) = @_;
-  foreach my $sr (@{$self->{ranges}}) {
-    return 1  if  ($n >= $sr->{min}) && ($n <= $sr->{max});
+  foreach my $r (@{$self->{ranges}}) {
+    return 1  if  $r->contains( $n );
   }
   return;
+}
+
+sub has_lower_bound { 
+  my ($self) = @_;
+  return $self->{ranges}->[0]->has_lower_bound;
+}
+
+sub has_upper_bound { 
+  my ($self) = @_;
+  return $self->{ranges}->[-1]->has_upper_bound;
 }
 
 

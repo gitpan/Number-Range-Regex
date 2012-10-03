@@ -11,22 +11,21 @@ use strict;
 use Number::Range::Regex::Range;
 use Number::Range::Regex::Iterator;
 use Number::Range::Regex::Util;
-use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION ); 
+use vars qw ( @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $VERSION ); 
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter );
 @EXPORT = qw( range rangespec );
-@EXPORT_OK =  qw( init range rangespec regex_range );
+@EXPORT_OK = qw ( init regex_range ) ;
+%EXPORT_TAGS = ( all => [ @EXPORT, @EXPORT_OK ] );
 
-$VERSION = '0.13';
+$VERSION = '0.20';
 
-my $init_opts;
+my $init_opts = {};
 
-sub features {
-  return { negative => 0 };
-}
+sub features { return { negative => 1 }; }
 
 sub init {
   my ($self, @opts) = @_;
@@ -59,13 +58,28 @@ sub regex_range {
     $opts = $init_opts;
   }
 
-  my $range = Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
-
-  return $range->regex( $opts );
+  return range($min, $max, $opts)->regex( $opts );
 }
 
 sub range {
-  return Number::Range::Regex::SimpleRange->new( @_ );
+  my ($min, $max, $opts) = @_;
+  my $range;
+  undef $min  if  defined $min && $min eq '-inf';
+  undef $max  if  defined $max && $max =~ /^\+?inf$/;
+  if(defined $min) {
+    if(defined $max) {
+      return Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
+    } else {
+      return Number::Range::Regex::InfiniteRange->new_positive_infinity( $min, $opts );
+    }
+  } else {
+    if(defined $max) {
+      return Number::Range::Regex::InfiniteRange->new_negative_infinity( $max, $opts );
+    } else {
+      die "must specify either a min or a max" if !$opts->{allow_wildcard};
+      return Number::Range::Regex::InfiniteRange->new_both( $opts );
+    }
+  }
 }
 
 sub rangespec {
@@ -84,26 +98,34 @@ sub rangespec {
     $range = $_[0];
   }
 
-  # TODO: allow ..3 to mean less than 3, 3.. to mean more than 3 as in
-  #       regex_range ?
-  my $section_validate  = qr/(?:\d+\.\.\d+|\d+)/;
-  my $range_validate = qr/$section_validate(?:,$section_validate)*/;
+  my $section_validate  = qr/(?:-?\d+\.\.-?\d+|-?\d+|-?\d+\.\.\+?inf|-inf\.\.-?\d+)/;
+  my $range_validate = qr/(?:|$section_validate(?:,\s*$section_validate)*)/;
   $range =~ s/\s+//g;
-  die "invalid range '$range'"  unless  $range =~ /^$range_validate$/;
+  die "invalid rangespec '$range'"  unless  $range =~ /^$range_validate$/;
 
-  my @sections = split(',', $range);
+  my @sections = split /,\s*/, $range;
   my @ranges;
   foreach my $section (@sections) {
-    if($section =~ /^(\d+)\.\.(\d+)$/) {
-      push @ranges, Number::Range::Regex::SimpleRange->new( $1, $2, $opts );
-    } elsif($section =~ /^(\d+)$/) {
+    if($section =~ /^(\d+)$/) {
       push @ranges, Number::Range::Regex::SimpleRange->new( $1, $1, $opts );
     } else {
-      die "can't parse section: '$section'";
+      my ($min, $max) = split /\.\./, $section, 2;
+      undef $min  if  defined $min && $min eq '-inf';
+      undef $max  if  defined $max && $max =~ /^\+?inf$/;
+      if(defined $min && defined $max) {
+        push @ranges, Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
+      } elsif(defined $min) {
+        push @ranges, Number::Range::Regex::InfiniteRange->new_positive_infinity( $min );
+      } elsif(defined $max) {
+        push @ranges, Number::Range::Regex::InfiniteRange->new_negative_infinity( $max );
+      } else { #min and max are undefined
+        push @ranges, Number::Range::Regex::InfiniteRange->new_both();
+      }
     }
   }
   # note: multi_union() will have the side effect of sorting
   #       and de-overlap-ify-ing the input ranges
+  return Number::Range::Regex::EmptyRange->new()  if  !@ranges;
   return multi_union( @ranges );
 }
 
@@ -152,7 +174,7 @@ Number::Range::Regex - create regular expressions that check for
 
   my $in_a_or_in_b_but_not_both = $a->xor($b);
 
-  my $it = $range->iterator();
+  my $it = rangespec("-20..42,47..52")->iterator();
   $it->first;
   do { print $it->fetch } while ($it->next);
   $it->last;
@@ -184,11 +206,11 @@ which is more legible? (bonus points if you spotted the bug)
 
 =item range
 
-  $range = range( MIN, MAX );
+  $range = range( $min, $max );
 
 Create a range between the first argument and the last. For example,
-the range above will correspond to 8, 9, 10, 11, and 12. This method
-is exported by default.
+$min==8 and $max==12, corresponds to the list containing 8, 9, 10, 11,
+and 12. This method is exported by default.
 
 =item rangespec
 
@@ -197,6 +219,32 @@ is exported by default.
 Create a "compound" range given the range specification passed. For
 example, the range above would consist of 8, 9, 10, 11, 12, 14, 19,
 20, 21, and 22. This method is exported by default.
+
+=back
+
+=head2 RANGE INTERROGATION
+
+=over
+
+=item contains
+
+  $range->contains( $number );
+
+Returns a true value if $range contains $number - otherwise, it returns
+a false value.
+
+=item overlaps
+
+  $range->overlaps( $another_range );
+
+Returns a true value if $range overlaps with $another_range - otherwise,
+it returns a false value. e.g.
+
+  rangespec('7..9')->overlaps( rangespec('4..6') )   => false
+  rangespec('7..9')->overlaps( rangespec('10..12') ) => false
+  rangespec('7..9')->overlaps( rangespec('6..10') )  => true
+  rangespec('7..9')->overlaps( rangespec('6..7') )   => true
+  
 
 =back
 
@@ -252,17 +300,19 @@ $range->to_string() instead.
 
 =head2 SET OPERATIONS
 
-=over
-
 given $range2 = rangespec( '0,2,4,6,8' ) and
       $range3 = rangespec( '0,3,6,9' )
+
+=over
 
 =item union
 
   $range = $range2->union( $range3 );
 
 Return the union of one range with another. In the example above,
-$range would consist of: 0, 2, 3, 4, 6, 8, and 9.
+$range would consist of: 0, 2, 3, 4, 6, 8, and 9. Note that union()
+can take more than one argument, e.g.
+  $range2->union( $range3, $range5, $range7, $range11, ... );
 
 =item intersect
 
@@ -289,17 +339,40 @@ this method is not symmetric - $range3->subtract( $range2 ) would be
 a different range consisting of 3 and 9. This method is also
 available via the aliases subtraction and minus.
 
+=item invert
+
+  $range = $range2->invert();
+
+Return the absolute complement of $range2. In the example above,
+$range would consist of: 
+  any integer less than or equal to -1
+  1, 3, 5, and 7,  and
+  any integer greater than or equal to 9
+This method is also available via the alias not.
+
 =back
 
 =head2 OTHER METHODS
 
 =over
 
+=item iterator
+
+iterators let you examine large or infinite sets with minimal memory:
+
+  $it = $range->iterator();
+  $it->first();
+  do {
+    do_something_with_value( $it->fetch );
+  } while ($it->next);
+
+for more information, see Number::Range::Regex::Iterator
+
 =item regex_range [ DEPRECATED ]
 
-  $regex = regex_range( MIN, MAX );
+  $regex = regex_range( $min, $max );
 
-This is a shortcut for range( MIN, MAX )->regex(). Useful for
+This is a shortcut for range( $min, $max )->regex(). Useful for
 one-off use when overload.pm does not support regex context.
 This method is deprecated, and may disappear with the next
 release of Number::Range::Regex. This method is not exported
@@ -308,8 +381,6 @@ by default.
 =back
 
 =head1 NOTES
-
-Non-negative integers only for now.
 
 It's usually better to check for number-ness only in the regular
 expression and verify the range of the number separately, eg:
@@ -332,6 +403,13 @@ web interface at L<http://rt.cpan.org>.
 Brian Szymanski  B<< <ski-cpan@allafrica.com> >> -- be sure to put
 Number::Range::Regex in the subject line if you want me to read
 your message.
+
+
+=head1 LICENSE
+
+Copyright 2012 Brian Szymanski.  All rights reserved.  This module is
+free software; you can redistribute it and/or modify it under the same
+terms as Perl itself.
 
 
 =head1 SEE ALSO

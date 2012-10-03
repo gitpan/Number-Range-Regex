@@ -2,7 +2,7 @@
 $|++;
 
 use strict;
-use Test::More tests => 241;
+use Test::More tests => 242;
 
 use lib "./t";
 use _nrr_test_util;
@@ -16,6 +16,8 @@ my $range;
 # test option management (via commenting option)
 $range = regex_range( 3, 4 );
 ok($range); # regex_range works before we call init()
+$range = regex_range( 3, 4, {no_leading_zeroes => 1} );
+ok($range); # regex_range with options works before we call init()
 ok($range =~ /[?][#]/); # range has a comment by default (as per $default_opts)
 
 # call init(comment => 0) (legacy format, no hashref), make sure comments go away

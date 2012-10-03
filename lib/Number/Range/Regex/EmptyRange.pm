@@ -8,14 +8,15 @@ package Number::Range::Regex::EmptyRange;
 
 use strict;
 use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION ); 
-use Number::Range::Regex::Util;
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.13';
+$VERSION = '0.20';
+
+use Number::Range::Regex::Util;
 
 sub new {
   my ($class) = @_;
@@ -46,10 +47,6 @@ sub regex {
   return qr/(?:$begin_comment_maybe$modifier_maybe(?:$regex_str)$end_comment_maybe)/;
 }
 
-sub touches { return; }
-sub overlaps { return; }
-
-sub intersect { intersection(@_); }
 sub intersection {
   my ($self, $other) = @_;
   return $self; 
@@ -60,8 +57,6 @@ sub union {
   return multi_union( @other );
 }
 
-sub minus { subtract(@_); }
-sub subtraction { subtract(@_); }
 sub subtract { 
   my ($self, @other) = @_;
   return $self;
@@ -72,10 +67,22 @@ sub xor {
   return $other;
 }
 
+sub invert {
+  my ($self) = @_;
+  return Number::Range::Regex::InfiniteRange->new_both();
+}
+
 sub contains {
   my ($self, $n) = @_;
   return;
 }
+
+sub touches { return; }
+sub overlaps { return; }
+
+sub has_lower_bound { return 1; }
+sub has_upper_bound { return 1; }
+
 
 1;
 

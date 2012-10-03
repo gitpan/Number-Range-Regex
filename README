@@ -1,4 +1,4 @@
-Number-Range-Regex version 0.13
+Number-Range-Regex version 0.20
 
 This is a module which can be used to perform set operations on
 ranges of integers efficiently, iterate over them, and convert them
