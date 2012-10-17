@@ -20,7 +20,7 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::SimpleRange );
 
-$VERSION = '0.20';
+$VERSION = '0.30';
 
 use Number::Range::Regex::SimpleRange;
 

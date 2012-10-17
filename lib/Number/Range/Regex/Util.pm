@@ -18,7 +18,7 @@ use base 'Exporter';
 @EXPORT_OK = qw ( _sort_by_min ) ;
 %EXPORT_TAGS = ( all => [ @EXPORT, @EXPORT_OK ] );
 
-$VERSION = '0.20';
+$VERSION = '0.30';
 
 require overload;
 sub has_regex_overloading {
@@ -32,17 +32,17 @@ sub has_regex_overloading {
 sub most(&@) {
   my ($condition, $first, @rest) = @_;
   my $most = $first;
+  no strict 'refs';
+  my $pkg = caller;
+  local *{ $pkg . '::b' } = \$most;
   foreach my $o (@rest) {
-    local ($a, $b) = ($o, $most);
+    local *{ $pkg . '::a' } = \$o;
     $most = $o  if  $condition->();
   }
   return $most; 
 }
 
-#sub min { return most( sub { $a < $b }, @_ ) }
 sub min { return most { $a < $b } @_ }
-
-#sub max { return most( sub { $a > $b }, @_ ) }
 sub max { return most { $a > $b } @_ }
 
 sub multi_union {
@@ -71,7 +71,7 @@ sub option_mangler {
 
 sub _sort_by_min {
   my ($a, $b) = @_;
-  return ($a->{min} < $b->{min}) ? ($a, $b) : ($b, $a);
+  return $a->{min} < $b->{min} ? ($a, $b) : ($b, $a);
 }
 
 1;

@@ -14,7 +14,7 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.20';
+$VERSION = '0.30';
 
 use Number::Range::Regex::Util;
 
@@ -69,7 +69,7 @@ sub xor {
 
 sub invert {
   my ($self) = @_;
-  return Number::Range::Regex::InfiniteRange->new_both();
+  return Number::Range::Regex::SimpleRange->new( '-inf', '+inf' );
 }
 
 sub contains {
@@ -83,6 +83,7 @@ sub overlaps { return; }
 sub has_lower_bound { return 1; }
 sub has_upper_bound { return 1; }
 
+sub is_infinite { return; }
 
 1;
 

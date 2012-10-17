@@ -21,7 +21,7 @@ use base 'Exporter';
 @EXPORT_OK = qw ( init regex_range ) ;
 %EXPORT_TAGS = ( all => [ @EXPORT, @EXPORT_OK ] );
 
-$VERSION = '0.20';
+$VERSION = '0.30';
 
 my $init_opts = {};
 
@@ -64,20 +64,20 @@ sub regex_range {
 sub range {
   my ($min, $max, $opts) = @_;
   my $range;
-  undef $min  if  defined $min && $min eq '-inf';
-  undef $max  if  defined $max && $max =~ /^\+?inf$/;
-  if(defined $min) {
-    if(defined $max) {
-      return Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
+  $min = '-inf'  if  !defined $min;
+  $max = '+inf'  if  !defined $max;
+  if($min eq '-inf') {
+    if($max eq '+inf') {
+      die "must specify either a min or a max or use the allow_wildcard argument" if !$opts->{allow_wildcard};
+      return Number::Range::Regex::SimpleRange->new( '-inf', '+inf', $opts );
     } else {
-      return Number::Range::Regex::InfiniteRange->new_positive_infinity( $min, $opts );
+      return Number::Range::Regex::SimpleRange->new( '-inf', $max, $opts );
     }
   } else {
-    if(defined $max) {
-      return Number::Range::Regex::InfiniteRange->new_negative_infinity( $max, $opts );
+    if($max eq '+inf') {
+      return Number::Range::Regex::SimpleRange->new( $min, '+inf', $opts );
     } else {
-      die "must specify either a min or a max" if !$opts->{allow_wildcard};
-      return Number::Range::Regex::InfiniteRange->new_both( $opts );
+      return Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
     }
   }
 }
@@ -98,8 +98,8 @@ sub rangespec {
     $range = $_[0];
   }
 
-  my $section_validate  = qr/(?:-?\d+\.\.-?\d+|-?\d+|-?\d+\.\.\+?inf|-inf\.\.-?\d+)/;
-  my $range_validate = qr/(?:|$section_validate(?:,\s*$section_validate)*)/;
+  my $section_validate  = qr/(?:-?\d+|(?:-?\d+|-inf)\.\.(?:\+?inf|-?\d+))/;
+  my $range_validate = qr/(?:|$section_validate(?:,$section_validate)*)/;
   $range =~ s/\s+//g;
   die "invalid rangespec '$range'"  unless  $range =~ /^$range_validate$/;
 
@@ -110,17 +110,10 @@ sub rangespec {
       push @ranges, Number::Range::Regex::SimpleRange->new( $1, $1, $opts );
     } else {
       my ($min, $max) = split /\.\./, $section, 2;
-      undef $min  if  defined $min && $min eq '-inf';
-      undef $max  if  defined $max && $max =~ /^\+?inf$/;
-      if(defined $min && defined $max) {
-        push @ranges, Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
-      } elsif(defined $min) {
-        push @ranges, Number::Range::Regex::InfiniteRange->new_positive_infinity( $min );
-      } elsif(defined $max) {
-        push @ranges, Number::Range::Regex::InfiniteRange->new_negative_infinity( $max );
-      } else { #min and max are undefined
-        push @ranges, Number::Range::Regex::InfiniteRange->new_both();
+      if($min eq '-inf' && $max eq '+inf' && !$opts->{allow_wildcard}) {
+        die "must specify either a min or a max or use the allow_wildcard argument";
       }
+      push @ranges, Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
     }
   }
   # note: multi_union() will have the side effect of sorting
@@ -286,17 +279,49 @@ Number::Range::Regex between v0.12 and v0.13, is:
 
 =head2 OVERLOADING
 
-=over
-
 Please note that range objects are overloaded so that in regex
 context, $range will be equivalent to $range->regex(). This
 works in all versions of perl >= v5.6.0. When it is further
 possible to distinguish regex context from string context (as
 in overload v1.10 or higher, available in perl >= v5.12.0),
-range objects will display in string context as the terser
-$range->to_string() instead. 
+range objects will display in string but not regex context as
+the terser, more legible $range->to_string() instead. 
 
-=back
+=head2 UNBOUNDED (aka "infinite") RANGES
+
+It is also possible to specify unbounded ranges, ie the set of
+all integers less than 17. This may be specified in any of the
+following ways:
+
+  range( undef, 17 );
+  range( '-inf', 17);
+  rangespec('-inf..17');
+
+Similarly the set of all integers greater than 17:
+
+  range( 17, undef );
+  range( 17, '+inf' );
+  rangespec('17..+inf');
+
+It is not, however, possible to specify the set of all integers by default.
+If you try to do so, Number::Range::Regex will complain that you
+"must specify either a min or a max or use the allow_wildcard argument":
+
+  rangespec('-inf..+inf') #boom
+  range( undef, '+inf' )  #boom
+  range( undef, undef )   #boom
+  range( '-inf', undef )  #let's go back to my room
+
+however, the error you receive suggests the solution if you really
+want such a range:
+
+  range( '-inf', '+inf', {allow_wildcard => 1} ) 
+
+To test if a range is infinite, you can call is_infinite():
+
+  1 == ! rangespec('3..7')->is_infinite();
+  1 == rangespec('16..+inf')->is_infinite();
+  1 == rangespec('')->not->is_infinite();
 
 =head2 SET OPERATIONS
 
@@ -326,8 +351,9 @@ via the alias intersection.
 
   $range = $range->xor( $another_range );
 
-Return the symmetric difference of $range2 and $range3. In the example
-above, $range would consist of 2, 3, 4, 8, and 9.
+Return the symmetric difference of $range2 and $range3 (elements in one
+or the other range, but not in both). In the example above, $range would
+consist of 2, 3, 4, 8, and 9.
 
 =item subtract
 
@@ -344,19 +370,22 @@ available via the aliases subtraction and minus.
   $range = $range2->invert();
 
 Return the absolute complement of $range2. In the example above,
-$range would consist of: 
-  any integer less than or equal to -1
-  1, 3, 5, and 7,  and
-  any integer greater than or equal to 9
-This method is also available via the alias not.
-
-=back
-
-=head2 OTHER METHODS
+$range would include:
 
 =over
 
-=item iterator
+  any integer less than or equal to -1
+  1, 3, 5, and 7,  and
+  any integer greater than or equal to 9.
+
+=back
+
+that is, $range->to_string would be '-inf..-1,1,3,5,7,9..+inf'. This
+method is also available via the alias not.
+
+=back
+
+=head2 ITERATORS
 
 iterators let you examine large or infinite sets with minimal memory:
 
@@ -368,14 +397,19 @@ iterators let you examine large or infinite sets with minimal memory:
 
 for more information, see Number::Range::Regex::Iterator
 
-=item regex_range [ DEPRECATED ]
+=head2 OTHER METHODS
+
+=item regex_range
+
+=over
 
   $regex = regex_range( $min, $max );
 
 This is a shortcut for range( $min, $max )->regex(). Useful for
-one-off use when overload.pm does not support regex context.
-This method is deprecated, and may disappear with the next
-release of Number::Range::Regex. This method is not exported
+one-off use when overload.pm does not support regex context. It
+should only be used with perl 5.10.X or lower where regex context
+overloading is not possible. This method may be deprecated in a
+future release of Number::Range::Regex. This method is not exported
 by default.
 
 =back

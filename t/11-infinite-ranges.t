@@ -2,14 +2,13 @@
 $|++;
 
 use strict;
-use Test::More tests => 317;
+use Test::More tests => 326;
 
 use lib "./t";
 use _nrr_test_util;
 
 use lib "./blib/lib";
 use Number::Range::Regex;
-use Number::Range::Regex::InfiniteRange;
 
 # test both ways, return true if both are true, false if both false, else die
 sub test_symmetrical {
@@ -22,13 +21,13 @@ sub test_symmetrical {
 }
 
 my $r;
-my $both = Number::Range::Regex::InfiniteRange->new_both();
-my $le_3 = Number::Range::Regex::InfiniteRange->new_negative_infinity(3);
-my $le_4 = Number::Range::Regex::InfiniteRange->new_negative_infinity(4);
-my $le_5 = Number::Range::Regex::InfiniteRange->new_negative_infinity(5);
-my $ge_3 = Number::Range::Regex::InfiniteRange->new_positive_infinity(3);
-my $ge_4 = Number::Range::Regex::InfiniteRange->new_positive_infinity(4);
-my $ge_5 = Number::Range::Regex::InfiniteRange->new_positive_infinity(5);
+my $both = Number::Range::Regex::SimpleRange->new( '-inf', '+inf' );
+my $le_3 = Number::Range::Regex::SimpleRange->new( '-inf', 3 );
+my $le_4 = Number::Range::Regex::SimpleRange->new( '-inf', 4 );
+my $le_5 = Number::Range::Regex::SimpleRange->new( '-inf', 5 );
+my $ge_3 = Number::Range::Regex::SimpleRange->new( 3, '+inf' );
+my $ge_4 = Number::Range::Regex::SimpleRange->new( 4, '+inf' );
+my $ge_5 = Number::Range::Regex::SimpleRange->new( 5, '+inf' );
 
 ok($both->contains($_)) for(-1,0,1);
 ok($le_3->contains($_)) for(-1..3);
@@ -92,64 +91,67 @@ ok($r->to_string eq $both->to_string);
 $r = $le_5->union( Number::Range::Regex::EmptyRange->new() );
 ok($r->to_string eq $le_5->to_string);
 $r = $ge_5->union( Number::Range::Regex::EmptyRange->new() );
+
 ok($r->to_string eq $ge_5->to_string);
 $r = $le_5->union( range(2, 4) );
 ok($r->to_string eq "-inf..5") ;
 ok(!$r->isa('Number::Range::Regex::CompoundRange'));
-ok($r->isa('Number::Range::Regex::InfiniteRange'));
+ok($r->is_infinite);
 ok($r->contains($_)) for(-1..5);
 ok(!$r->contains($_)) for(6);
 $r = $le_5->union( range(2, 5) );
 ok($r->to_string eq "-inf..5") ;
 ok(!$r->isa('Number::Range::Regex::CompoundRange'));
-ok($r->isa('Number::Range::Regex::InfiniteRange'));
+ok($r->is_infinite);
 ok($r->contains($_)) for(-1..5);
 ok(!$r->contains($_)) for(6);
 $r = $le_5->union( range(2, 6) );
 ok($r->to_string eq "-inf..6") ;
 ok(!$r->isa('Number::Range::Regex::CompoundRange'));
-ok($r->isa('Number::Range::Regex::InfiniteRange'));
+ok($r->is_infinite);
 ok($r->contains($_)) for(-1..6);
 ok(!$r->contains($_)) for(7);
 $r = $le_5->union( range(6, 7) ); # test touches() operation
 ok($r->to_string eq "-inf..7") ;
 ok(!$r->isa('Number::Range::Regex::CompoundRange'));
-ok($r->isa('Number::Range::Regex::InfiniteRange'));
+ok($r->is_infinite);
 ok($r->contains($_)) for(-1..7);
 ok(!$r->contains($_)) for(8);
 $r = $le_5->union( range(7, 8) );
 ok($r->to_string eq "-inf..5,7..8") ;
 ok($r->isa('Number::Range::Regex::CompoundRange'));
+ok($r->is_infinite);
 ok($r->contains($_)) for(-1..5,7..8);
 ok(!$r->contains($_)) for(6,9);
 
 $r = $ge_5->union( range(6, 8) );
 ok($r->to_string eq "5..+inf");
 ok(!$r->isa('Number::Range::Regex::CompoundRange'));
-ok($r->isa('Number::Range::Regex::InfiniteRange'));
+ok($r->is_infinite);
 ok(!$r->contains($_)) for(-1..4);
 ok($r->contains($_)) for(5..9);
 $r = $ge_5->union( range(5, 8) );
 ok($r->to_string eq "5..+inf");
 ok(!$r->isa('Number::Range::Regex::CompoundRange'));
-ok($r->isa('Number::Range::Regex::InfiniteRange'));
+ok($r->is_infinite);
 ok(!$r->contains($_)) for(-1..4);
 ok($r->contains($_)) for(5..9);
 $r = $ge_5->union( range(4, 8) );
 ok($r->to_string eq "4..+inf");
 ok(!$r->isa('Number::Range::Regex::CompoundRange'));
-ok($r->isa('Number::Range::Regex::InfiniteRange'));
+ok($r->is_infinite);
 ok(!$r->contains($_)) for(-1..3);
 ok($r->contains($_)) for(4..9);
 $r = $ge_5->union( range(3, 4) ); # test touches() operation
 ok($r->to_string eq "3..+inf");
 ok(!$r->isa('Number::Range::Regex::CompoundRange'));
-ok($r->isa('Number::Range::Regex::InfiniteRange'));
+ok($r->is_infinite);
 ok(!$r->contains($_)) for(-1..2);
 ok($r->contains($_)) for(3..9);
 $r = $ge_5->union( range(2, 3) );
 ok($r->to_string eq "2..3,5..+inf");
 ok($r->isa('Number::Range::Regex::CompoundRange'));
+ok($r->is_infinite);
 ok(!$r->contains($_)) for(-1..1,4);
 ok($r->contains($_)) for(2..3,5..9);
 
@@ -257,3 +259,12 @@ $r = rangespec('2..inf');
 ok($r->to_string eq '2..+inf');
 $r = rangespec('-inf..-77,-42..42,77..+inf');
 ok($r->to_string eq '-inf..-77,-42..42,77..+inf');
+
+# tests of is_infinite()
+ok(!Number::Range::Regex::EmptyRange->new()->is_infinite());
+ok( range(undef, 3)->is_infinite() );
+ok( range(-3, undef)->is_infinite() );
+ok(!range(-3, 3)->is_infinite() );
+ok( rangespec('-inf..-2,2..4,6..8,10..12')->is_infinite());
+ok( rangespec('2..4,6..8,10..12,14..+inf')->is_infinite());
+ok(!rangespec('2..4,6..8,10..12')->is_infinite());

@@ -14,7 +14,7 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter );
 
-$VERSION = '0.20';
+$VERSION = '0.30';
 
 use overload bool => \&in_range,
              '""' => sub { return $_[0] };
@@ -45,19 +45,19 @@ sub new {
     $self->{ranges} = $range->{ranges};
   } elsif($range->isa('Number::Range::Regex::EmptyRange')) {
     die "can't iterate over an empty range";
-  } else { #SimpleRange or InfiniteRange
+  } else { #SimpleRange
     $self->{ranges} = [ $range ];
   } 
 
-  $self->first()  if  defined $self->{ranges}->[0]->{min};
+  $self->first()  if  $self->{ranges}->[0]->has_lower_bound;
 
   return $self; 
 }
 
 sub size {
   my ($self) = @_;
-  return undef          if  !defined $self->{ranges}->[0]->{min};
-  return undef          if  !defined $self->{ranges}->[-1]->{max};
+  return undef          if  !$self->{ranges}->[0]->has_lower_bound;
+  return undef          if  !$self->{ranges}->[-1]->has_upper_bound;
   return $self->{size}  if  defined $self->{size};
   foreach my $sr ( @{$self->{ranges}} ) {
     $self->{size} += $sr->{max} - $sr->{min} + 1;
@@ -74,10 +74,10 @@ sub seek {
       $self->{number}       = $number;
       $self->{rangenum}     = $n;
       $self->{out_of_range} = 0;
-      if(defined $sr->{min}) {
+      if($sr->has_lower_bound) {
         $self->{rangepos_left}  = $number - $sr->{min};
       }
-      if(defined $sr->{max}) {
+      if($sr->has_upper_bound) {
         $self->{rangepos_right} = $sr->{max} - $number;
       }
       last;
@@ -92,12 +92,12 @@ sub seek {
 sub first {
   my ($self) = @_;
   my $first_r = $self->{ranges}->[0];
-  die "can't first() an iterator with no lower bound"  unless  defined $first_r->{min};
+  die "can't first() an iterator with no lower bound"  unless  $first_r->has_lower_bound;
   $self->{number}         = $first_r->{min};
   $self->{rangenum}       = 0;
-  if(defined $first_r->{min}) {
+  if($first_r->has_lower_bound) {
     $self->{rangepos_left}  = 0;
-    if(defined $first_r->{max}) {
+    if($first_r->has_upper_bound) {
       $self->{rangepos_right} = $first_r->{max} - $first_r->{min};
     }
   }
@@ -108,12 +108,12 @@ sub first {
 sub last {
   my ($self) = @_;
   my $last_r = $self->{ranges}->[-1];
-  die "can't last() an iterator with no upper bound"  unless  defined $last_r->{max};
+  die "can't last() an iterator with no upper bound"  unless  $last_r->has_upper_bound;
   $self->{number}       = $last_r->{max};
   $self->{rangenum}     = $#{$self->{ranges}};
-  if(defined $last_r->{max}) {
+  if($last_r->has_upper_bound) {
     $self->{rangepos_right} = 0;
-    if(defined $last_r->{min}) {
+    if($last_r->has_lower_bound) {
       $self->{rangepos_left} = $last_r->{max} - $last_r->{min};
     }
   }
@@ -135,20 +135,20 @@ sub next {
 
 #_dbg($self, "pre-next:  ");
   my $this_r = $self->{ranges}->[ $self->{rangenum} ];
-  if( defined $this_r->{max} ? $self->{number} < $this_r->{max} : 1 ) {
+  if( $this_r->has_upper_bound ? $self->{number} < $this_r->{max} : 1 ) {
     $self->{rangepos_left}++   if  defined $self->{rangepos_left};
     $self->{rangepos_right}--  if  defined $self->{rangepos_right};
     $self->{number}++;
   } else {
     $self->{rangenum}++;
-    my $new_r = $self->{ranges}->[ $self->{rangenum} ];
-    $self->{rangepos_left} = 0;
-    if(defined $new_r->{max}) { #min must be defined - this is the next one up
-      $self->{rangepos_right} = $new_r->{max} - $new_r->{min};
-    }
     if($self->{rangenum} == @{$self->{ranges}}) {
       $self->{out_of_range} = 'overflow';
       return $self;
+    }
+    my $new_r = $self->{ranges}->[ $self->{rangenum} ];
+    $self->{rangepos_left} = 0;
+    if($new_r->has_upper_bound) { #min must be defined - this is the next one up
+      $self->{rangepos_right} = $new_r->{max} - $new_r->{min};
     }
     $self->{number} = $new_r->{min};
   }
@@ -163,19 +163,19 @@ sub prev {
 
 #_dbg($self, "pre-prev:  ");
   my $this_r = $self->{ranges}->[ $self->{rangenum} ];
-  if( defined $this_r->{min} ? $self->{number} > $this_r->{min} : 1 ) {
+  if( $this_r->has_lower_bound ? $self->{number} > $this_r->{min} : 1 ) {
     $self->{rangepos_left}--   if  defined $self->{rangepos_left};
     $self->{rangepos_right}++  if  defined $self->{rangepos_right};
     $self->{number}--;
   } else {
     $self->{rangenum}--;
-    my $new_r = $self->{ranges}->[ $self->{rangenum} ];
-    $self->{rangepos_left} = $new_r->{max} - $new_r->{min};
-    $self->{rangepos_right} = 0;
     if($self->{rangenum} == -1) {
       $self->{out_of_range} = 'underflow';
       return $self;
     }
+    my $new_r = $self->{ranges}->[ $self->{rangenum} ];
+    $self->{rangepos_left} = $new_r->{max} - $new_r->{min};
+    $self->{rangepos_right} = 0;
     $self->{number} = $new_r->{max};
   }
 #_dbg($self, "post-prev: ");

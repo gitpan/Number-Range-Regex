@@ -15,7 +15,7 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.20';
+$VERSION = '0.30';
 
 use Number::Range::Regex::Util;
 
@@ -43,10 +43,10 @@ sub to_string {
 sub regex {
   my ($self, $passed_opts) = @_;
 
-  # handle empty ranges
-  return Number::Range::Regex::EmptyRange->regex( @_ ) unless (@{$self->{ranges}});
-
   my $opts = option_mangler( $passed_opts );
+
+#  # handle empty ranges
+#  return Number::Range::Regex::EmptyRange->regex( @_ ) unless (@{$self->{ranges}});
 
   my $separator = $opts->{readable} ? ' | ' : '|';
   my $regex_str = join $separator,
@@ -201,7 +201,7 @@ sub invert {
   } @{$self->{ranges}};
   my @excluded = ();
   if(defined $included[0]->{min}) {
-    push @excluded, Number::Range::Regex::InfiniteRange->new_negative_infinity( $included[0]->{min}-1 );
+    push @excluded, Number::Range::Regex::SimpleRange->new( '-inf', $included[0]->{min}-1 );
   }
   for(my $c=1; $c<@included; ++$c) {
     my $last = $included[$c-1];
@@ -213,7 +213,7 @@ sub invert {
     }
   }
   if(defined $included[-1]->{max}) {
-    push @excluded, Number::Range::Regex::InfiniteRange->new_positive_infinity( $included[-1]->{max}+1 );
+    push @excluded, Number::Range::Regex::SimpleRange->new( $included[-1]->{max}+1, '+inf' );
   }
   return Number::Range::Regex::CompoundRange->new( @excluded );
 }
@@ -227,7 +227,6 @@ sub union {
   my @s_ranges = @{$self->{ranges}};
   my @o_ranges = $other->isa('Number::Range::Regex::CompoundRange') ? @{$other->{ranges}} :
                  $other->isa('Number::Range::Regex::SimpleRange') ? ( $other ) :
-                 $other->isa('Number::Range::Regex::InfiniteRange') ? ( $other ) :
                  die "other is neither a simple nor compound range!";
 
   if(!defined $s_ranges[0]->{min}) {
@@ -270,8 +269,6 @@ sub union {
 #warn "last_range: $last_range, next_range: $next_range";
       my $r_union = $next_range->union($last_range);
       if($r_union->isa('Number::Range::Regex::SimpleRange')) {
-        push @new_ranges, $r_union;
-      } elsif($r_union->isa('Number::Range::Regex::InfiniteRange')) {
         push @new_ranges, $r_union;
       } elsif($r_union->isa('Number::Range::Regex::CompoundRange')) {
         my @ranges = @{$r_union->{ranges}};
@@ -338,6 +335,11 @@ sub has_upper_bound {
   return $self->{ranges}->[-1]->has_upper_bound;
 }
 
+sub is_infinite {      
+  my ($self) = @_;
+  my $ranges = $self->{ranges};
+  return ! ( $ranges->[0]->has_lower_bound && $ranges->[-1]->has_upper_bound );
+}
 
 1;
 

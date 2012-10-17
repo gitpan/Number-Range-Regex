@@ -14,11 +14,10 @@ require Exporter;
 use base 'Exporter';
 @ISA = qw( Exporter );
 
-$VERSION = '0.20';
+$VERSION = '0.30';
 
 use Number::Range::Regex::CompoundRange;
 use Number::Range::Regex::EmptyRange;
-use Number::Range::Regex::InfiniteRange;
 use Number::Range::Regex::SimpleRange;
 use Number::Range::Regex::TrivialRange;
 use Number::Range::Regex::Util;
@@ -73,7 +72,7 @@ sub touches { die "called abstract Range->touches() on a ".ref($_[0]) }
 sub contains { die "called abstract Range->contains() on a ".ref($_[0]) }
 sub has_lower_bound { die "called abstract Range->has_lower_bound() on a ".ref($_[0]) }
 sub has_upper_bound { die "called abstract Range->has_upper_bound() on a ".ref($_[0]) }
-
+sub is_infinite { die "called abstract Range->is_infinite() on a ".ref($_[0]) }
 
 1;
 

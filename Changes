@@ -1,5 +1,18 @@
 Revision history for Perl extension Number::Range::Regexp
 
+0.30 Oct 17 11:41:24 EDT 2012 r3143
+   - support for rangespec() with arguments of '-inf', '+inf'
+   - implement & document is_infinite()
+   - improve scope mangling in Util::most()
+   - proper operations of all utility functions with infinite values
+   - fix bug in xor affecting simple ranges
+   - implement NRR::Util::inf to support arithmetic on potentially
+     infinite values (perl's implementation is dodgy on 5.[68].X
+     and with certain libc implementations)
+   - restructure to eliminate a separate InfiniteRange.pm, saving
+     ~150 lines of code
+   - POD improvements
+
 0.20 Oct  3 17:34:01 EDT 2012 r3074
    - fairly complete implementation - just missing intersect/subtract/xor
      on compound, infinite ranges.

@@ -2,7 +2,7 @@
 $|++;
 
 use strict;
-use Test::More tests => 767;
+use Test::More tests => 773;
 
 use lib "./t";
 use _nrr_test_util;
@@ -576,7 +576,12 @@ ok( !$r->contains($_) ) for ( 0,1,5..7 );
 ok($r->not->to_string eq '-inf..1,5..7,10..+inf');
 ok($mul3->union($mul2)->minus($mul3->intersection($mul2))->to_string eq $r->to_string); #a xor b = (a u b) - (a int b)
 
-#TODO: need more xor tests on SimpleRanges to cover all the cases
+ok(rangespec('1..7')->xor( rangespec('1..11') )->to_string() eq '8..11');
+ok(rangespec('1..11')->xor( rangespec('1..11') )->to_string() eq '');
+ok(rangespec('1..7')->xor( rangespec('1..6') )->to_string() eq '7');
+ok(rangespec('1..7')->xor( rangespec('3..11') )->to_string() eq '1..2,8..11');
+ok(rangespec('1..11')->xor( rangespec('3..11') )->to_string() eq '1..2');
+ok(rangespec('1..7')->xor( rangespec('3..6') )->to_string() eq '1..2,7');
 
 # tests of promotion of simplerange to compoundrange
 my $near5 = rangespec('4..6');
