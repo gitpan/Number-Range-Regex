@@ -14,7 +14,7 @@ require Exporter;
 use base 'Exporter';
 @ISA = qw( Exporter );
 
-$VERSION = '0.30';
+$VERSION = '0.31';
 
 use Number::Range::Regex::CompoundRange;
 use Number::Range::Regex::EmptyRange;
@@ -34,7 +34,22 @@ $default_opts = {
 
 use overload bool => sub { return $_[0] },
              '""' => sub { return $_[0]->overload_string() },
-             'qr' => sub { return $_[0]->regex() };
+             'qr' => sub { return $_[0]->regex() },
+             'ne' => sub { return !_equals( @_ ) },
+             'eq' => \&_equals;
+
+# note: we don't use overload's fallback feature for eq/ne because
+# doing so would also define lt, le, gt, ge, and cmp which are
+# suspect in this context - if you are trying it without ->to_string()ing
+# first, you're probably doing something wrong...
+sub _equals {
+  my ($a, $b) = @_;
+#  $a = $a->to_string()  if  ref($a) =~ /^Number::Range::Regex::.*Range$/;
+#  $b = $b->to_string()  if  ref($b) =~ /^Number::Range::Regex::.*Range$/;
+  $a = $a->to_string()  if  ref($a);
+  $b = $b->to_string()  if  ref($b);
+  return $a eq $b;  
+}
 
 sub overload_string {
   my ($self) = @_;

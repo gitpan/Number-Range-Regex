@@ -2,7 +2,7 @@
 $|++;
 
 use strict;
-use Test::More tests => 242;
+use Test::More tests => 321;
 
 use lib "./t";
 use _nrr_test_util;
@@ -371,4 +371,96 @@ ok( test_all_ranges_exhaustively( 998, 1002 ) );
 ok( test_all_ranges_exhaustively( 1998, 2002 ) );
 ok( test_all_ranges_exhaustively( 1098, 1102 ) );
 
+# more tests of negative values
+ok( test_all_ranges_exhaustively( "-098", -102 ) );
+ok( test_all_ranges_exhaustively( -98, -102 ) );
+ok( test_all_ranges_exhaustively( -198, -202 ) );
+ok( test_all_ranges_exhaustively( -898, -902 ) );
+ok( test_all_ranges_exhaustively( -988, -992 ) );
+ok( test_all_ranges_exhaustively( -998, -1002 ) );
+ok( test_all_ranges_exhaustively( -1998, -2002 ) );
+ok( test_all_ranges_exhaustively( -1098, -1102 ) );
+
+$range = regex_range( -4, -3 );
+ok($range);
+ok($range !~ m/\[\+\]/);
+ok(-5    !~ /^$range$/);
+ok('-05' !~ /^$range$/);
+ok(-4    =~ /^$range$/);
+ok('-04' =~ /^$range$/);
+ok(-3    =~ /^$range$/);
+ok('-03' =~ /^$range$/);
+ok(-2    !~ /^$range$/);
+ok('-02' !~ /^$range$/);
+
+$range = regex_range( -4, -3, {no_leading_zeroes => 1} );
+ok($range);
+ok($range !~ m/\[\+\]/);
+ok($range !~ m/0\*/);
+ok(-5    !~ /^$range$/);
+ok('-05' !~ /^$range$/);
+ok(-4    =~ /^$range$/);
+ok('-04' !~ /^$range$/);
+ok(-3    =~ /^$range$/);
+ok('-03' !~ /^$range$/);
+ok(-2    !~ /^$range$/);
+ok('-02' !~ /^$range$/);
+
+$range = regex_range( -41, -39 );
+ok($range);
+ok($range !~ m/\[\+\]/);
+ok(-42    !~ /^$range$/);
+ok('-042' !~ /^$range$/);
+ok(-41    =~ /^$range$/);
+ok('-041' =~ /^$range$/);
+ok(-40    =~ /^$range$/);
+ok('-040' =~ /^$range$/);
+ok(-39    =~ /^$range$/);
+ok('-039' =~ /^$range$/);
+ok(-38    !~ /^$range$/);
+ok('-038' !~ /^$range$/);
+
+$range = regex_range( -41, -39, {no_leading_zeroes => 1} );
+ok($range);
+ok($range !~ m/\[\+\]/);
+ok($range !~ m/0\*/);
+ok(-42    !~ /^$range$/);
+ok('-042' !~ /^$range$/);
+ok(-41    =~ /^$range$/);
+ok('-041' !~ /^$range$/);
+ok(-40    =~ /^$range$/);
+ok('-040' !~ /^$range$/);
+ok(-39    =~ /^$range$/);
+ok('-039' !~ /^$range$/);
+ok(-38    !~ /^$range$/);
+ok('-038' !~ /^$range$/);
+
+$range = regex_range( -401, -399 );
+ok($range);
+ok($range !~ m/\[\+\]/);
+ok(-402    !~ /^$range$/);
+ok('-0402' !~ /^$range$/);
+ok(-401    =~ /^$range$/);
+ok('-0401' =~ /^$range$/);
+ok(-400    =~ /^$range$/);
+ok('-0400' =~ /^$range$/);
+ok(-399    =~ /^$range$/);
+ok('-0399' =~ /^$range$/);
+ok(-398    !~ /^$range$/);
+ok('-0398' !~ /^$range$/);
+
+$range = regex_range( -401, -399, {no_leading_zeroes => 1} );
+ok($range);
+ok($range !~ m/\[\+\]/);
+ok($range !~ m/0\*/);
+ok(-402    !~ /^$range$/);
+ok('-0402' !~ /^$range$/);
+ok(-401    =~ /^$range$/);
+ok('-0401' !~ /^$range$/);
+ok(-400    =~ /^$range$/);
+ok('-0400' !~ /^$range$/);
+ok(-399    =~ /^$range$/);
+ok('-0399' !~ /^$range$/);
+ok(-398    !~ /^$range$/);
+ok('-0398' !~ /^$range$/);
 

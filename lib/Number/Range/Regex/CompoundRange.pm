@@ -15,25 +15,30 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.30';
+$VERSION = '0.31';
 
 use Number::Range::Regex::Util;
+use Number::Range::Regex::Util::inf qw ( neg_inf pos_inf );
 
 sub new {
   my ($class, @ranges) = @_;
+  my $opts;
+  if(ref $ranges[-1] eq 'HASH') {
+    $opts = option_mangler( pop @ranges );
+  }
   # TODO: should/can we deduplicate here by calling union for each of @ranges?
-  my @sorted_ranges = sort { 
-    #return 0  if  !defined $a->{min} && !defined $b->{min}; #shouldnt happen
-    return -1  if  !defined $a->{min};
-    return 1  if  !defined $b->{min};
-    return $a->{min} <=> $b->{min}
-  } @ranges;
-  return bless { ranges => [ @sorted_ranges ] }, $class;
+#  my @sorted_ranges = sort { 
+#    #return 0  if  $a->{min} == '-inf' && $b->{min} == '-inf'; #shouldnt happen
+#    return -1  if  $a->{min} == '-inf';
+#    return 1   if  $b->{min} == '-inf';
+#    return $a->{min} <=> $b->{min}
+#  } @ranges;
+  return bless { ranges => [ @ranges ], opts => $opts }, $class;
+#  return bless { ranges => [ @sorted_ranges ], opts => $opts }, $class;
 }
 
 sub to_string {
   my ($self, $passed_opts) = @_;
-  #my $opts = option_mangler( $passed_opts );
 
   return Number::Range::Regex::EmptyRange->to_string( @_ ) unless (@{$self->{ranges}});
 
@@ -43,7 +48,7 @@ sub to_string {
 sub regex {
   my ($self, $passed_opts) = @_;
 
-  my $opts = option_mangler( $passed_opts );
+  my $opts = option_mangler( $self->{opts}, $passed_opts );
 
 #  # handle empty ranges
 #  return Number::Range::Regex::EmptyRange->regex( @_ ) unless (@{$self->{ranges}});
@@ -65,22 +70,23 @@ sub regex {
 }
 
 sub _do_unequal_min {
-  my ($lower, $upper, $ptr, $ranges) = @_;
+#warn "in _do_unequal_min";
+  my ($self, $lower, $upper, $ptr, $ranges) = @_;
   if( $lower->{max} > $upper->{max} ) {
     # 3 ranges, last of which may yet overlap
-    my $r1 = Number::Range::Regex::SimpleRange->new( $lower->{min}, $upper->{min}-1 );
+    my $r1 = Number::Range::Regex::SimpleRange->new( $lower->{min}, $upper->{min}-1, $self->{opts} );
     my $r2 = $upper;
-    my $r3 = Number::Range::Regex::SimpleRange->new( $upper->{max}+1, $lower->{max} );
+    my $r3 = Number::Range::Regex::SimpleRange->new( $upper->{max}+1, $lower->{max}, $self->{opts} );
 #warn "l: $lower->{min}..$lower->{max} -> $r1->{min}..$r1->{max},$r2->{min}..$r2->{max},$r3->{min}..$r3->{max}";
     splice( @$ranges, $$ptr, 1, ($r1, $r2, $r3) );
     $$ptr += 2; # $r3 may overlap something else
   } elsif( $lower->{max} >= $upper->{min} ) {
-    # 2 ranges, neither of which can overlap anything else
-    my $r1 = Number::Range::Regex::SimpleRange->new( $lower->{min}, $upper->{min}-1 );
-    my $r2 = $upper;
+    # 2 ranges, latter of which may yet overlap
+    my $r1 = Number::Range::Regex::SimpleRange->new( $lower->{min}, $upper->{min}-1, $self->{opts} );
+    my $r2 = Number::Range::Regex::SimpleRange->new( $upper->{min}, $lower->{max}, $self->{opts} );
 #warn "l: $lower->{min}..$lower->{max} -> $r1->{min}..$r1->{max},$r2->{min}..$r2->{max}";
     splice( @$ranges, $$ptr, 1, ($r1, $r2 ) );
-    $$ptr += 2;
+    $$ptr += 1;
   } else { # $lower->{max} < $upper->{min} 
     # 1 range, no overlap
 #warn "l: $lower->{min}..$lower->{max} is ok";
@@ -107,29 +113,30 @@ sub sectionify {
   #      s=(6,7..9,10..12) and o=(7..9);
   my ($s_ptr, $o_ptr) = (0, 0);
   while( ($s_ptr < @s_ranges) && ($o_ptr < @o_ranges) ) {
+#warn "s_ranges: @s_ranges, o_ranges: @o_ranges";
     my $this_s = $s_ranges[$s_ptr];
     my $this_o = $o_ranges[$o_ptr];
 #warn "checking this_s: $this_s->{min}..$this_s->{max}, this_o: $this_o->{min}..$this_o->{max}";
     if( $this_s->{min} < $this_o->{min} ) {
 #printf STDERR "l==s, ";
-      _do_unequal_min($this_s, $this_o, \$s_ptr, \@s_ranges );
+      $self->_do_unequal_min($this_s, $this_o, \$s_ptr, \@s_ranges );
     } elsif( $this_s->{min} > $this_o->{min} ) {
 #printf STDERR "l==o, ";
-      _do_unequal_min($this_o, $this_s, \$o_ptr, \@o_ranges );
+      $self->_do_unequal_min($this_o, $this_s, \$o_ptr, \@o_ranges );
     } else { # $this_s->{min} == $this_o->{min}
       if( $this_s->{max} < $this_o->{max} ) {
         # 2 ranges, latter of which may yet overlap
         my $r1 = $this_s;
-        my $r2 = Number::Range::Regex::SimpleRange->new($this_s->{max}+1, $this_o->{max});
-        splice( @s_ranges, $s_ptr, 1, ($r1, $r2) );
-#warn "s: $this_s->{min}..$this_s->{max} -> $r1->{min}..$r1->{max},$r2->{min}..$r2->{max}";
-        $s_ptr++; # $r2 may overlap something else
+        my $r2 = Number::Range::Regex::SimpleRange->new($this_s->{max}+1, $this_o->{max}, $self->{opts} );
+        splice( @o_ranges, $o_ptr, 1, ($r1, $r2) );
+#warn "o: $this_o->{min}..$this_o->{max} -> $r1->{min}..$r1->{max},$r2->{min}..$r2->{max}";
+        $o_ptr++; # $r2 may overlap something else
       } elsif( $this_s->{max} > $this_o->{max} ) {
         # 2 ranges, latter of which may yet overlap
         my $r1 = $this_o;
-        my $r2 = Number::Range::Regex::SimpleRange->new($this_o->{max}+1, $this_s->{max});
+        my $r2 = Number::Range::Regex::SimpleRange->new($this_o->{max}+1, $this_s->{max}, $self->{opts});
         splice( @s_ranges, $s_ptr, 1, ($r1, $r2) );
-#warn "o: $this_o->{min}..$this_o->{max} -> $r1->{min}..$r1->{max},$r2->{min}..$r2->{max}";
+#warn "s: $this_s->{min}..$this_s->{max} -> $r1->{min}..$r1->{max},$r2->{min}..$r2->{max}";
         $s_ptr++; # $r2 may overlap something else
       } else { # $this_s->{max} == $this_o->{min} 
         # 1 range, no overlap
@@ -177,31 +184,33 @@ sub sectionify {
 sub intersection {
   my ($self, $other) = @_;
   my $sections = $self->sectionify( $other );
-  return multi_union( @{$sections->{in_both}} );
+  return multi_union( @{$sections->{in_both}}, $self->{opts} );
 }
 
 sub subtract {
   my ($self, $other) = @_; 
   my $sections = $self->sectionify( $other );
-  return multi_union( @{$sections->{just_self}} );
+  return multi_union( @{$sections->{just_self}}, $self->{opts} );
 }  
 
 sub xor {
   my ($self, $other) = @_; 
   my $sections = $self->sectionify( $other );
-  return multi_union( @{$sections->{just_self}}, @{$sections->{just_other}} );
+  return multi_union( @{$sections->{just_self}}, @{$sections->{just_other}}, $self->{opts} );
 }
 
 sub invert {
   my ($self) = @_; 
-  my @included = sort {
-    return -1  if  !defined $a->{min};
-    return 1  if  !defined $b->{min};
-    return $a->{min} <=> $b->{min}
-  } @{$self->{ranges}};
+  #TODO: do i need that sort? probably not...
+#  my @included = sort {
+#    return -1  if  $a->{min} == '-inf';
+#    return 1   if  $b->{min} == '-inf';
+#    return $a->{min} <=> $b->{min}
+#  } @{$self->{ranges}};
+  my @included = @{$self->{ranges}};
   my @excluded = ();
-  if(defined $included[0]->{min}) {
-    push @excluded, Number::Range::Regex::SimpleRange->new( '-inf', $included[0]->{min}-1 );
+  if($included[0]->{min} != neg_inf ) {
+    push @excluded, Number::Range::Regex::SimpleRange->new( neg_inf, $included[0]->{min}-1, $self->{opts} );
   }
   for(my $c=1; $c<@included; ++$c) {
     my $last = $included[$c-1];
@@ -209,18 +218,18 @@ sub invert {
     if($last->{max}+1 > $this->{min}-1) {
       die "internal error - overlapping SRs?";
     } else {
-      push @excluded, Number::Range::Regex::SimpleRange->new( $last->{max}+1, $this->{min}-1 );
+      push @excluded, Number::Range::Regex::SimpleRange->new( $last->{max}+1, $this->{min}-1, $self->{opts} );
     }
   }
-  if(defined $included[-1]->{max}) {
-    push @excluded, Number::Range::Regex::SimpleRange->new( $included[-1]->{max}+1, '+inf' );
+  if($included[-1]->{max} != pos_inf) {
+    push @excluded, Number::Range::Regex::SimpleRange->new( $included[-1]->{max}+1, pos_inf, $self->{opts} );
   }
-  return Number::Range::Regex::CompoundRange->new( @excluded );
+  return Number::Range::Regex::CompoundRange->new( @excluded, $self->{opts} );
 }
 
 sub union {
   my ($self, @other) = @_;
-  return multi_union( $self, @other )  if  @other > 1;
+  return multi_union( $self, @other, $self->{opts} )  if  @other > 1;
   my $other = shift @other;
 
   my @new_ranges;
@@ -229,9 +238,11 @@ sub union {
                  $other->isa('Number::Range::Regex::SimpleRange') ? ( $other ) :
                  die "other is neither a simple nor compound range!";
 
-  if(!defined $s_ranges[0]->{min}) {
+  # TODO: might not need the first two clauses here since we can now
+  # compare infinite values to integers properly
+  if($s_ranges[0]->{min} == neg_inf) {
     @new_ranges = shift @s_ranges;
-  } elsif(!defined $o_ranges[0]->{min}) {
+  } elsif($o_ranges[0]->{min} == neg_inf) {
     @new_ranges = shift @o_ranges;
   } elsif( $s_ranges[0]->{min} < $o_ranges[0]->{min} ) {
     @new_ranges = shift @s_ranges;
@@ -244,9 +255,9 @@ sub union {
 #warn "top loop new_ranges: ".join(" ", map { $_->regex } @new_ranges);
     if( defined $s_ranges[0] ) {
       if( defined $o_ranges[0] ) {
-        if( !defined $s_ranges[0]->{min} ) {
+        if($s_ranges[0]->{min} == neg_inf) {
           $next_range = shift @s_ranges;
-        } elsif( !defined $o_ranges[0]->{min} ) {
+        } elsif($o_ranges[0]->{min} == neg_inf) {
           $next_range = shift @o_ranges;
         } elsif( $s_ranges[0]->{min} < $o_ranges[0]->{min} ) {
           $next_range = shift @s_ranges;
@@ -282,10 +293,11 @@ sub union {
     }
   }
 
-  my $result = bless { ranges => [ _collapse_ranges(@new_ranges) ] },
-                    'Number::Range::Regex::CompoundRange';
+  my $result = bless { ranges => [ _collapse_ranges(@new_ranges) ],
+                       opts => $self->{opts} },
+               'Number::Range::Regex::CompoundRange';
   my @minmax = $result->_is_contiguous();
-  return Number::Range::Regex::SimpleRange->new( @minmax )  if  @minmax;
+  return Number::Range::Regex::SimpleRange->new( @minmax, $self->{opts} )  if  @minmax;
 
   return $result; 
 }

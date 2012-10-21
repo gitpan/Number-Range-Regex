@@ -19,6 +19,9 @@ package Number::Range::Regex::Util::inf;
 #    caller context. granted we can't do this with this implementation
 #    either because perl has broken things for anyone who wants to
 #    implement such an inf(), but it is annoying enough for me to list
+# 4) it depends on the underlying libc's definition of the string
+#    version of infinity, which on win32 is '1.#INF', solaris
+#    'Infinity', and libc 'inf'
 
 use strict;
 use vars qw ( @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $VERSION ); 
@@ -28,47 +31,65 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter );
 @EXPORT = qw ( );
-@EXPORT_OK = qw ( _cmp _lt _le _eq _ge _gt _ne );
+@EXPORT_OK = qw ( _cmp _lt _le _eq _ge _gt _ne pos_inf neg_inf is_inf );
 %EXPORT_TAGS = ( all => [ @EXPORT, @EXPORT_OK ] );
 
-use overload '<=>' => \&_cmp,
-             '<'   => \&_lt,
-             '<='  => \&_le,
-             '>='  => \&_ge,
-             '>'   => \&_gt,
-             '=='  => \&_eq,
-             '!='  => \&_ne,
-             '-'   => \&_add_to_inf,
-             '+'   => \&_add_to_inf;
+$VERSION = '0.31';
 
-sub _add_to_inf {
-  my ($l, $r) = @_;
-  die "unimplemented"  if  $r =~ /inf$/;
-  return $l  if  $l =~ /inf$/;
-  die "unimplemented";
-};
+use overload '<=>' => \&_cmp, # also defines <, <=, ==, !=, >, >=
+             '+'   => \&_add, # with neg, also defines non-unary -
+             'neg' => \&neg,
+             '""'  => sub { my $self = shift; return $$self };
 
-sub _cmp {
-  my ($l, $r) = @_;
-  die 'internal error' unless defined $l and defined $r; # phase this out
-  if($l eq '-inf') {
-    return $r eq '-inf' ? 0 : -1;
-  } elsif($l eq '+inf') {
-    return $r eq '+inf' ? 0 : 1;
-  } elsif($r eq '-inf') {
-    return 1; #we know $l ne '-inf', we checked it above
-  } elsif($r eq '+inf') {
-    return -1; #we know $l ne '+inf', we checked it above
+sub pos_inf { my $v = '+inf'; return bless \$v, __PACKAGE__; }
+sub neg_inf { my $v = '-inf'; return bless \$v, __PACKAGE__; }
+
+# returns -1 if this is neg_inf, 0 if this is non-infinite, 1 if pos_inf
+sub is_inf {
+  my ($val) = @_;
+  return -1  if  "$val" eq '-inf';
+  return  1  if  "$val" eq '+inf';
+  return 0;
+}
+
+sub neg {
+  my ($val) = @_;
+  return pos_inf  if  is_inf($val)==-1;
+  return neg_inf  if  is_inf($val)==1;
+  return -$val;
+}
+
+sub _add {
+  my ($l, $r, $swapped) = @_;
+  ($l, $r) = ($r, $l) if $swapped;
+  if(is_inf($l) && is_inf($r)) {
+    die "neg_inf + pos_inf is undefined"  if  is_inf($l) != is_inf($r);
+    return $l; # -inf + -inf == -inf, +inf + +inf == +inf
+  } elsif(is_inf($l)) {
+    return $l; #+-inf + any non infinite quantity = +-inf
+  } elsif(is_inf($r)) {
+    return $r; #+-inf + any non infinite quantity = +-inf
   } else {
-    return $l <=> $r;
+    die __PACKAGE__."::_add: internal error: neither $l nor $r are infinite?";
   }
 }
-sub _le { my ($l, $r) = @_; return _cmp($l, $r) != 1; };
-sub _lt { my ($l, $r) = @_; return _cmp($l, $r) == -1; };
-sub _ge { my ($l, $r) = @_; return _cmp($l, $r) != -1; };
-sub _gt { my ($l, $r) = @_; return _cmp($l, $r) == 1; };
-sub _eq { my ($l, $r) = @_; return _cmp($l, $r) == 0; };
-sub _ne { my ($l, $r) = @_; return _cmp($l, $r) != 0; };
+
+sub _cmp {
+  my ($l, $r, $swapped) = @_;
+  ($l, $r) = ($r, $l) if $swapped;
+  die 'internal error' unless defined $l and defined $r; # phase this out
+  if("$l" eq '-inf') {
+    return "$r" eq '-inf' ? 0 : -1;
+  } elsif("$l" eq '+inf') {
+    return "$r" eq '+inf' ? 0 : 1;
+  } elsif("$r" eq '-inf') {
+    return 1; #we know $l ne '-inf', we checked it above
+  } elsif("$r" eq '+inf') {
+    return -1; #we know $l ne '+inf', we checked it above
+  } else {
+    die __PACKAGE__."::_add: internal error: neither $l nor $r are infinite?";
+  }
+}
 
 1;
 

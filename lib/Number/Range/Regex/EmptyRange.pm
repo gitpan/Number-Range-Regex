@@ -14,13 +14,14 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.30';
+$VERSION = '0.31';
 
 use Number::Range::Regex::Util;
+use Number::Range::Regex::Util::inf qw ( neg_inf pos_inf );
 
 sub new {
-  my ($class) = @_;
-  return bless {}, $class; 
+  my ($class, $opts) = @_;
+  return bless { opts => $opts }, $class; 
 }
 
 sub to_string {
@@ -31,7 +32,7 @@ sub to_string {
 sub regex {
   my ($self, $passed_opts) = @_;
 
-  my $opts = option_mangler( $passed_opts );
+  my $opts = option_mangler( $self->{opts}, $passed_opts );
 
   my $regex_str = '(?!)'; # never matches
   $regex_str = " $regex_str " if $opts->{readable};
@@ -44,7 +45,7 @@ sub regex {
     $end_comment_maybe = $opts->{readable} ? " # end $comment" : "(?# end $comment )";
   }
 
-  return qr/(?:$begin_comment_maybe$modifier_maybe(?:$regex_str)$end_comment_maybe)/;
+  return qr/(?:$begin_comment_maybe$modifier_maybe$regex_str$end_comment_maybe)/;
 }
 
 sub intersection {
@@ -54,7 +55,7 @@ sub intersection {
 
 sub union {
   my ($self, @other) = @_;
-  return multi_union( @other );
+  return multi_union( @other, $self->{opts} );
 }
 
 sub subtract { 
@@ -69,7 +70,7 @@ sub xor {
 
 sub invert {
   my ($self) = @_;
-  return Number::Range::Regex::SimpleRange->new( '-inf', '+inf' );
+  return Number::Range::Regex::SimpleRange->new( neg_inf, pos_inf, $self->{opts} );
 }
 
 sub contains {

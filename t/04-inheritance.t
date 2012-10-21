@@ -39,7 +39,7 @@ ok(!$r->isa('Number::Range::Regex::SimpleRange'));
 ok(!$r->isa('Number::Range::Regex::TrivialRange'));
 ok(check_type($r, 'Compound'));
 
-$r = Number::Range::Regex::TrivialRange->new( 5, 8, '[5-8]' );
+$r = Number::Range::Regex::TrivialRange->new( 5, 8 );
 ok($r->isa('Number::Range::Regex::Range'));
 ok(!$r->isa('Number::Range::Regex::EmptyRange'));
 ok(!$r->isa('Number::Range::Regex::CompoundRange'));

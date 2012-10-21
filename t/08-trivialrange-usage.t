@@ -10,19 +10,19 @@ use _nrr_test_util;
 use lib "./blib/lib";
 use Number::Range::Regex;
 
-my $tr_1XX = Number::Range::Regex::TrivialRange->new(100, 199, '1\d{2}');
+my $tr_1XX = Number::Range::Regex::TrivialRange->new(100, 199);
 ok(test_rangeobj_exhaustive($tr_1XX));
 ok($tr_1XX->to_string eq '100..199');
-my $tr_12X = Number::Range::Regex::TrivialRange->new(120, 129, '12\d');
+my $tr_12X = Number::Range::Regex::TrivialRange->new(120, 129);
 ok(test_rangeobj_exhaustive($tr_12X));
 ok($tr_12X->to_string eq '120..129');
-my $tr_14X = Number::Range::Regex::TrivialRange->new(140, 149, '14\d');
+my $tr_14X = Number::Range::Regex::TrivialRange->new(140, 149);
 ok(test_rangeobj_exhaustive($tr_14X));
 ok($tr_14X->to_string eq '140..149');
-my $tr_100_to_149 = Number::Range::Regex::TrivialRange->new(100, 149, '1[0-4]\d');
+my $tr_100_to_149 = Number::Range::Regex::TrivialRange->new(100, 149);
 ok($tr_100_to_149->to_string eq '100..149');
 ok(test_rangeobj_exhaustive($tr_100_to_149));
-my $tr_130_to_179 = Number::Range::Regex::TrivialRange->new(130, 179, '1[3-7]\d');
+my $tr_130_to_179 = Number::Range::Regex::TrivialRange->new(130, 179);
 ok($tr_130_to_179->to_string eq '130..179');
 ok(test_rangeobj_exhaustive($tr_130_to_179));
 

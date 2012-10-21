@@ -25,4 +25,6 @@ t/08-trivialrange-usage.t
 t/09-setops.t
 t/10-iterator.t
 t/11-infinite-ranges.t
-t/12-extra.t
+t/12-leading-zeroes.t
+
+META.json                                Module JSON meta-data (added by MakeMaker)

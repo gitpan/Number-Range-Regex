@@ -133,7 +133,7 @@ eval { $it->seek( 5000 ) }; ok($@);
 eval { $it->seek( 50000 ) }; ok($@);
 
 # test a trivialrange
-$range = Number::Range::Regex::TrivialRange->new( 1230, 1239, '123\d' );
+$range = Number::Range::Regex::TrivialRange->new( 1230, 1239 );
 ok($range);
 $it = $range->iterator();
 ok($it);

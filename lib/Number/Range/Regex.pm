@@ -11,6 +11,7 @@ use strict;
 use Number::Range::Regex::Range;
 use Number::Range::Regex::Iterator;
 use Number::Range::Regex::Util;
+use Number::Range::Regex::Util::inf qw( neg_inf pos_inf );
 use vars qw ( @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $VERSION ); 
 eval { require warnings; }; #it's ok if we can't load warnings
 
@@ -21,9 +22,9 @@ use base 'Exporter';
 @EXPORT_OK = qw ( init regex_range ) ;
 %EXPORT_TAGS = ( all => [ @EXPORT, @EXPORT_OK ] );
 
-$VERSION = '0.30';
+$VERSION = '0.31';
 
-my $init_opts = {};
+my $init_opts = $Number::Range::Regex::Range::default_opts;
 
 sub features { return { negative => 1 }; }
 
@@ -47,6 +48,9 @@ sub init {
 sub regex_range {
   my ($min, $max, $passed_opts) = @_;
 
+  # TODO: make options_mangler a little smarter for this case so it takes a
+  #       default hashref arg.
+
   my $opts;
   if($passed_opts) {
     die "regex_range: too many arguments" unless ref $passed_opts eq 'HASH';
@@ -58,28 +62,18 @@ sub regex_range {
     $opts = $init_opts;
   }
 
-  return range($min, $max, $opts)->regex( $opts );
+  return range($min, $max, $opts)->regex();
 }
 
 sub range {
   my ($min, $max, $opts) = @_;
   my $range;
-  $min = '-inf'  if  !defined $min;
-  $max = '+inf'  if  !defined $max;
-  if($min eq '-inf') {
-    if($max eq '+inf') {
-      die "must specify either a min or a max or use the allow_wildcard argument" if !$opts->{allow_wildcard};
-      return Number::Range::Regex::SimpleRange->new( '-inf', '+inf', $opts );
-    } else {
-      return Number::Range::Regex::SimpleRange->new( '-inf', $max, $opts );
-    }
-  } else {
-    if($max eq '+inf') {
-      return Number::Range::Regex::SimpleRange->new( $min, '+inf', $opts );
-    } else {
-      return Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
-    }
+  $min = neg_inf  if  !defined $min;
+  $max = pos_inf  if  !defined $max;
+  if($min == neg_inf && $max == pos_inf) {
+    die "must specify either a min or a max or use the allow_wildcard argument" if !$opts->{allow_wildcard};
   }
+  return Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
 }
 
 sub rangespec {
@@ -99,26 +93,27 @@ sub rangespec {
   }
 
   my $section_validate  = qr/(?:-?\d+|(?:-?\d+|-inf)\.\.(?:\+?inf|-?\d+))/;
-  my $range_validate = qr/(?:|$section_validate(?:,$section_validate)*)/;
-  $range =~ s/\s+//g;
+  my $range_validate = qr/(?:|$section_validate(?:,\s*$section_validate)*)/;
   die "invalid rangespec '$range'"  unless  $range =~ /^$range_validate$/;
 
   my @sections = split /,\s*/, $range;
   my @ranges;
   foreach my $section (@sections) {
-    if($section =~ /^(\d+)$/) {
+    if($section =~ /^(-?\d+)$/) {
       push @ranges, Number::Range::Regex::SimpleRange->new( $1, $1, $opts );
     } else {
       my ($min, $max) = split /\.\./, $section, 2;
-      if($min eq '-inf' && $max eq '+inf' && !$opts->{allow_wildcard}) {
+      if($min == neg_inf && $max == pos_inf && !$opts->{allow_wildcard}) {
         die "must specify either a min or a max or use the allow_wildcard argument";
       }
+      $min = neg_inf  if  $min eq '-inf';
+      $max = pos_inf  if  $max eq '+inf';
       push @ranges, Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
     }
   }
   # note: multi_union() will have the side effect of sorting
   #       and de-overlap-ify-ing the input ranges
-  return Number::Range::Regex::EmptyRange->new()  if  !@ranges;
+  return Number::Range::Regex::EmptyRange->new( $opts )  if  !@ranges;
   return multi_union( @ranges );
 }
 
@@ -286,6 +281,9 @@ possible to distinguish regex context from string context (as
 in overload v1.10 or higher, available in perl >= v5.12.0),
 range objects will display in string but not regex context as
 the terser, more legible $range->to_string() instead. 
+
+If you find any cryptic errors about overloading, please use
+an explicit ->to_string or ->regex() and file a bug.
 
 =head2 UNBOUNDED (aka "infinite") RANGES
 

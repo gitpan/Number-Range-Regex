@@ -16,20 +16,25 @@ require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.30';
+$VERSION = '0.31';
 
 use Number::Range::Regex::Util ':all';
+use Number::Range::Regex::Util::inf qw( neg_inf pos_inf is_inf );
 
 sub new {
   my ($class, $min, $max, $passed_opts) = @_;
 
   my $opts = option_mangler( $passed_opts );
 
-  die 'old way' if !( defined $min && defined $max );
+  die 'internal error undefined min and max from caller: '.join(":", caller) if !( defined $min && defined $max );
 
   die "min ($min) must be an integer or /^[+-]?inf$/"  if  $min !~ /^[-+]?(?:inf|\d+)$/;
   die "max ($max) must be an integer or /^[+-]?inf$/"  if  $max !~ /^[-+]?(?:inf|\d+)$/;
-  $max = '+inf'  if  $max eq 'inf';
+
+  foreach my $val ( \$min, \$max ) {
+    $$val = pos_inf  if  !ref $$val && $$val =~ /^[+]?inf$/;
+    $$val = neg_inf  if  !ref $$val && $$val =~ /^-inf$/;
+  }
 
   if( $min > $max ) {
     if($opts->{autoswap}) {
@@ -38,12 +43,11 @@ sub new {
       die "min > max (autoswap option not specified";
     }
   }
-  return bless { min => $min, max => $max }, $class; 
+  return bless { min => $min, max => $max, opts => $opts }, $class; 
 }
 
 sub to_string {
   my ($self, $passed_opts) = @_;
-  #my $opts = option_mangler( $passed_opts );
   if( $self->{min} == $self->{max} ) {
     return $self->{min};
   # the prefer_comma option is dangerous because if you read in 3,4
@@ -59,20 +63,15 @@ sub to_string {
 sub regex {
   my ($self, $passed_opts) = @_;
 
-  my $opts = option_mangler( $passed_opts );
+  my $opts = option_mangler( $self->{opts}, $passed_opts );
 
-  if(!defined $self->{tranges}) {
-    $self->{tranges} = [ $self->_calculate_tranges( $opts ) ];
-  }
+  $self->{tranges} ||= [ $self->_calculate_tranges( $opts ) ];
 
   my $separator      = $opts->{readable} ? ' | ' : '|';
-  my $regex_str = join $separator, map { $_->regex() } @{$self->{tranges}};
+  my $regex_str = join $separator, map { $_->regex( $opts ) } @{$self->{tranges}};
   $regex_str = " $regex_str "  if  $opts->{readable};
 
   my $modifier_maybe = $opts->{readable} ? '(?x)' : '';
-  my $sign_maybe     = $opts->{no_sign} ? '' : '[+]?';
-  my $zeroes_maybe   = $opts->{no_leading_zeroes} ? '' : '0*';
-  $sign_maybe = $zeroes_maybe = '' if $self->{min} < 0;
   my ($begin_comment_maybe, $end_comment_maybe) = ('', '');
   if($opts->{comment}) {
     my ($min, $max) = ($self->{min}, $self->{max});
@@ -80,7 +79,9 @@ sub regex {
     $begin_comment_maybe = $opts->{readable} ? " # begin $comment" : "(?# begin $comment )";
     $end_comment_maybe = $opts->{readable} ? " # end $comment" : "(?# end $comment )";
   }
-  return qr/$begin_comment_maybe$modifier_maybe$sign_maybe$zeroes_maybe(?:$regex_str)$end_comment_maybe/; 
+  $regex_str = "(?:$regex_str)"  if  @{$self->{tranges}} != 1;
+
+  return qr/$begin_comment_maybe$modifier_maybe$regex_str$end_comment_maybe/; 
 }
 
 sub _calculate_tranges {
@@ -89,22 +90,22 @@ sub _calculate_tranges {
   my $max = $self->{max};
 
   #canonicalize min and max by removing leading zeroes unless the value is 0
-  $min =~ s/^0+//; $min = 0 if $min eq '';
-  $max =~ s/^0+//; $max = 0 if $max eq '';
+  if(!ref $min) { $min =~ s/^0+//; $min = 0 if $min eq ''; }
+  if(!ref $max) { $max =~ s/^0+//; $max = 0 if $max eq ''; }
 
   if( $min < 0 && $max < 0 ) {
-    my $pos_sr = Number::Range::Regex::SimpleRange->new( -$max, -$min );
+    my $pos_sr = __PACKAGE__->new( -$max, -$min );
     my @tranges = $pos_sr->_calculate_tranges( $opts );
     @tranges = reverse map { Number::Range::Regex::TrivialRange->new(
-                         -$_->{max}, -$_->{min}, "-$_->{regex}" ) } @tranges;
+                         -$_->{max}, -$_->{min}, $self->{opts} ) } @tranges;
     return @tranges;
   } elsif( $min < 0 && $max >= 0 ) {
     # min..-1, 0..max
-    my $pos_lo_sr = Number::Range::Regex::SimpleRange->new( 1, -$min );
+    my $pos_lo_sr = __PACKAGE__->new( 1, -$min );
     my @tranges = $pos_lo_sr->_calculate_tranges( $opts );
     @tranges = reverse map { Number::Range::Regex::TrivialRange->new(
-                         -$_->{max}, -$_->{min}, "-$_->{regex}" ) } @tranges;
-    push @tranges, Number::Range::Regex::SimpleRange->new( 0, $max )->_calculate_tranges( $opts );
+                         -$_->{max}, -$_->{min}, $self->{opts} ) } @tranges;
+    push @tranges, __PACKAGE__->new( 0, $max )->_calculate_tranges( $opts );
     return @tranges;
   } elsif( $min >= 0 && $max < 0 ) {
     die "_calculate_tranges() - internal error - min($min)>=0 but max($max)<0?";
@@ -112,43 +113,36 @@ sub _calculate_tranges {
   # if we get here, $min >= 0 and $max >= 0
 
   if ( $min == $max ) {
-    return Number::Range::Regex::TrivialRange->new( $min, $min, "$min" );
+    return Number::Range::Regex::TrivialRange->new( $min, $min, $self->{opts} );
   }
 
-  if($min eq '-inf') {
-    if($max eq '+inf') {
-      die "TODO";
-    } else {
-      if($self->{max} < 0) {
-        # iterate from $self->{max} down to the next (power of 10) - 1 (e.g. -9999)
-        # then spit out a regex for any negative integer with a longer length
-        my $min_digits = length($self->{max})-1;
-        my $tmp = '-'.('9' x $min_digits);
-        my $inf_re = "-\\d{$min_digits,}"; # -inf..$tmp-1
-        my $noninf = Number::Range::Regex::SimpleRange->new($tmp, $self->{max});
-        return ( Number::Range::Regex::TrivialRange->new( '-inf', $tmp-1, $inf_re ),
-                 $noninf->_calculate_tranges( $opts ) );
-      } else {
-        my $noninf = Number::Range::Regex::SimpleRange->new(0, $self->{max});
-        return ( Number::Range::Regex::TrivialRange->new( '-inf', -1, '-\d+' ),
-                 $noninf->_calculate_tranges( $opts ) );
-      }
-    }
-  } elsif($max eq '+inf') {
+  if($min == neg_inf) {
+die "we never get here?";
+#      if($self->{max} < 0) {
+#        # iterate from $self->{max} down to the next (power of 10) - 1 (e.g. -9999)
+#        # then spit out a regex for any negative integer with a longer length
+#        my $min_digits = length($self->{max})-1;
+#        my $tmp = '-'.('9' x $min_digits);
+#        my $noninf = __PACKAGE__->new($tmp, $self->{max});
+#        return ( Number::Range::Regex::TrivialRange->new( neg_inf, $tmp-1, $self->{opts} ),
+#                 $noninf->_calculate_tranges( $opts ) );
+#      } else {
+#        my $noninf = __PACKAGE__->new(0, $self->{max});
+#        return ( Number::Range::Regex::TrivialRange->new( neg_inf, -1, $self->{opts} ),
+#                 $noninf->_calculate_tranges( $opts ) );
+#      }
+  } elsif($max == pos_inf) {
     if($self->{min} < 0) {
-      my $noninf = Number::Range::Regex::SimpleRange->new($self->{min}, -1);
+      my $noninf = __PACKAGE__->new($self->{min}, -1);
       return ( $noninf->_calculate_tranges( $opts ),
-               Number::Range::Regex::TrivialRange->new( 0, '+inf', '\d+' ) );
+               Number::Range::Regex::TrivialRange->new( 0, pos_inf, $self->{opts} ) );
     } else {
       # iterate from $self->{min} up to the next (power of 10) - 1 (e.g. 9999)
       # then spit out a regex for any integer with a longer length
-      my $min_digits = length($self->{min})+1;
       my $tmp = '9' x length $self->{min};
-      my $noninf = Number::Range::Regex::SimpleRange->new($self->{min}, $tmp);
-      my $sign_maybe = $opts->{no_sign} ? '' : '[+]?';
-      my $inf_re = "$sign_maybe\\d{$min_digits,}";
+      my $noninf = __PACKAGE__->new($self->{min}, $tmp);
       return ( $noninf->_calculate_tranges( $opts ),
-               Number::Range::Regex::TrivialRange->new( $tmp+1, '+inf', $inf_re ) );
+               Number::Range::Regex::TrivialRange->new( $tmp+1, pos_inf, $self->{opts} ) );
     }
   } else {
 
@@ -201,25 +195,21 @@ sub _do_range_setting_loop {
   my @ranges = ();
   foreach my $digit_pos (@$digit_pos_range) {
     my $pos = $digit_pos - $string_offset - 1;
-    my $header = $pos < 0 ? "" : substr($string_base, 0, $pos);
+    my $static_header = $pos < 0 ? "" : substr($string_base, 0, $pos);
     my $trailer_len = $rightmost - $digit_pos;
-    my $trailer = $trailer_len == 0 ? "" :
-                  $trailer_len > 1 ? "\\d{$trailer_len}" :
-                  '\d';
 
     my $digit   = substr($padded_string_base, $digit_pos-1, 1);
 
-    my ($digit_min, $digit_max) = $digit_range_sub->( $digit, $trailer_len, $header );
+    my ($digit_min, $digit_max) = $digit_range_sub->( $digit, $trailer_len, $static_header );
 
     my $digit_range = ($digit_max < $digit_min)  ? next :
                       ($digit_max == $digit_min) ? $digit_min :
                       "[$digit_min-$digit_max]";
 
-    my $range_min = $header.$digit_min.(0 x $trailer_len);
-    my $range_max = $header.$digit_max.(9 x $trailer_len);
-    my $range_re  = $header.$digit_range.$trailer;
+    my $range_min = $static_header.$digit_min.(0 x $trailer_len);
+    my $range_max = $static_header.$digit_max.(9 x $trailer_len);
     push @ranges, Number::Range::Regex::TrivialRange->new(
-                    $range_min, $range_max, $range_re);
+                    $range_min, $range_max, $self->{opts} );
   }
   return @ranges; 
 }
@@ -228,26 +218,25 @@ sub intersection {
   my ($self, $other) = @_;
 
   if( $other->isa('Number::Range::Regex::CompoundRange') ) {
-    return Number::Range::Regex::CompoundRange->new( $self )->intersection( $other);
+    return Number::Range::Regex::CompoundRange->new( $self, $self->{opts} )->intersection( $other );
   } elsif( $other->is_infinite ) {
     return $other->intersection( $self );
   }
   my ($lower, $upper) = _sort_by_min( $self, $other );
   if( $upper->{min} <= $lower->{max} ) {
     return $upper  if  $upper->{max} <= $lower->{max};
-    return Number::Range::Regex::SimpleRange->new(
-               $upper->{min}, $lower->{max} );
+    return __PACKAGE__->new( $upper->{min}, $lower->{max} );
   } else {
-    return Number::Range::Regex::EmptyRange->new();
+    return Number::Range::Regex::EmptyRange->new( $self->{opts} );
   }
 }
 
 sub union {
   my ($self, @other) = @_;
-  return multi_union( $self, @other )  if  @other > 1;
+  return multi_union( $self, @other, $self->{opts} )  if  @other > 1;
   my $other = shift @other;
   if( $other->isa('Number::Range::Regex::CompoundRange') ) {
-    return Number::Range::Regex::CompoundRange->new( $self )->union( $other);
+    return Number::Range::Regex::CompoundRange->new( $self, $self->{opts} )->union( $other);
   } elsif( $other->isa('Number::Range::Regex::EmptyRange') ) {
     return $self;
 #  } elsif( $other->is_infinite ) {
@@ -256,17 +245,16 @@ sub union {
   my ($lower, $upper) = _sort_by_min( $self, $other );
   if( $upper->{min} <= $lower->{max}+1 ) {
     return $lower  if  $lower->{max} >= $upper->{max};
-    return Number::Range::Regex::SimpleRange->new( 
-               $lower->{min}, max( $lower->{max}, $upper->{max} ) );
+    return __PACKAGE__->new( $lower->{min}, max( $lower->{max}, $upper->{max} ), $self->{opts} );
   } else {
-    return Number::Range::Regex::CompoundRange->new( $lower, $upper );
+    return Number::Range::Regex::CompoundRange->new( $lower, $upper, $self->{opts} );
   }
 }
 
 sub subtract {
   my ($self, $other) = @_;
   if( $other->isa('Number::Range::Regex::CompoundRange') ) {
-    return Number::Range::Regex::CompoundRange->new( $self )->subtract( $other);
+    return Number::Range::Regex::CompoundRange->new( $self, $self->{opts} )->subtract( $other);
   } elsif( $other->is_infinite ) {
     return $other->subtract( $self );
   }
@@ -276,14 +264,11 @@ sub subtract {
     if( $self->{max} <= $other->{max} ) {
       # e.g. (1..7)-(3..11) = (1..2)
       # e.g. (1..11)-(3..11) = (1..2)
-      return Number::Range::Regex::SimpleRange->new(
-                 $self->{min}, $other->{min}-1 );
+      return __PACKAGE__->new( $self->{min}, $other->{min}-1 );
     } else {
       # e.g. (1..7)-(2..6) = (1, 7)
-      my $r1 = Number::Range::Regex::SimpleRange->new(
-                   $self->{min}, $other->{min}-1 );
-      my $r2 = Number::Range::Regex::SimpleRange->new(
-                   $other->{max}+1, $self->{max} );
+      my $r1 = __PACKAGE__->new( $self->{min}, $other->{min}-1 );
+      my $r2 = __PACKAGE__->new( $other->{max}+1, $self->{max} );
       return $r1->union( $r2 );
     }
   } else {
@@ -293,8 +278,7 @@ sub subtract {
       return Number::Range::Regex::EmptyRange->new();
     } else {
       # e.g. (1..7)-(1..4) = (5..7)
-      return Number::Range::Regex::SimpleRange->new(
-                 $other->{max}+1, $self->{max} );
+      return __PACKAGE__->new( $other->{max}+1, $self->{max} );
     }
   }
 }
@@ -302,7 +286,7 @@ sub subtract {
 sub xor {
   my ($self, $other) = @_;
   if( $other->isa('Number::Range::Regex::CompoundRange') ) {
-    return Number::Range::Regex::CompoundRange->new( $self )->xor( $other);
+    return Number::Range::Regex::CompoundRange->new( $self, $self->{opts} )->xor( $other );
   } elsif( $other->is_infinite ) {
     return $other->xor( $self );
   }
@@ -311,35 +295,29 @@ sub xor {
   if( $self->{min} == $other->{min} ) {
     if( $self->{max} < $other->{max} ) {
       # e.g. (1..7)xor(1..11) = (8..11)
-      return Number::Range::Regex::SimpleRange->new(
-                 $self->{max}+1, $other->{max} );
+      return __PACKAGE__->new( $self->{max}+1, $other->{max} );
     } elsif($self->{max} == $other->{max}) {
       # e.g. (1..11)xor(1..11) = ()
       return Number::Range::Regex::EmptyRange->new();
     } else {
       # e.g. (1..7)xor(1..6) = (7)
-      return Number::Range::Regex::SimpleRange->new(
-                 $other->{max}+1, $self->{max} );
+      return __PACKAGE__->new( $other->{max}+1, $self->{max} );
     }
   } else {
     my ($lower, $upper) = _sort_by_min( $self, $other );
     if($lower->{max} < $upper->{max}) {
       # e.g. (1..7)xor(3..11) = (1..2, 8..11)
-      my $r1 = Number::Range::Regex::SimpleRange->new(
-                   $lower->{min}, $upper->{min}-1 );
-      my $r2 = Number::Range::Regex::SimpleRange->new(
-                   $lower->{max}+1, $upper->{max} );
+      my $r1 = __PACKAGE__->new( $lower->{min}, $upper->{min}-1 );
+      my $r2 = __PACKAGE__->new( $lower->{max}+1, $upper->{max} );
       return $r1->union( $r2 );
     } elsif($lower->{max} == $upper->{max}) {
       # e.g. (1..11)xor(3..11) = (1..2)
-      return Number::Range::Regex::SimpleRange->new(
+      return __PACKAGE__->new(
                  $lower->{min}, $upper->{min}-1 );
     } else {
       # e.g. (1..7)xor(3..6) = (1..2, 7)
-      my $r1 = Number::Range::Regex::SimpleRange->new(
-                   $lower->{min}, $upper->{min}-1 );
-      my $r2 = Number::Range::Regex::SimpleRange->new(
-                   $upper->{max}+1, $lower->{max} );
+      my $r1 = __PACKAGE__->new( $lower->{min}, $upper->{min}-1 );
+      my $r2 = __PACKAGE__->new( $upper->{max}+1, $lower->{max} );
       return $r1->union( $r2 );
     }
   }
@@ -348,13 +326,13 @@ sub xor {
 sub invert {
   my ($self) = @_;
   my @r;
-  if($self->{min} ne '-inf') {
-    push @r, __PACKAGE__->new( '-inf', $self->{min}-1 );
+  if($self->{min} != neg_inf) {
+    push @r, __PACKAGE__->new( neg_inf, $self->{min}-1 );
   }
-  if($self->{min} ne '+inf') {
-    push @r, __PACKAGE__->new( $self->{max}+1, '+inf' );
+  if($self->{max} != pos_inf) {
+    push @r, __PACKAGE__->new( $self->{max}+1, pos_inf );
   }
-  return multi_union( @r );
+  return multi_union( @r, $self->{opts} );
 }
 
 sub overlaps {
@@ -390,12 +368,11 @@ sub contains {
   return ($n >= $self->{min}) && ($n <= $self->{max});
 }
 
-sub has_lower_bound { my ($self) = @_; return $self->{min} ne '-inf'; }
-sub has_upper_bound { my ($self) = @_; return $self->{max} ne '+inf'; }
+sub has_lower_bound { my ($self) = @_; return $self->{min} != neg_inf; }
+sub has_upper_bound { my ($self) = @_; return $self->{max} != pos_inf; }
 
 sub is_infinite {
   my ($self) = @_;
-#  return !( defined $self->{min} && defined $self->{max} );
   return !( $self->has_lower_bound && $self->has_upper_bound );
 }
 

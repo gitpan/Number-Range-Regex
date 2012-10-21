@@ -18,7 +18,7 @@ use base 'Exporter';
 @EXPORT_OK = qw ( _sort_by_min ) ;
 %EXPORT_TAGS = ( all => [ @EXPORT, @EXPORT_OK ] );
 
-$VERSION = '0.30';
+$VERSION = '0.31';
 
 require overload;
 sub has_regex_overloading {
@@ -47,24 +47,27 @@ sub max { return most { $a > $b } @_ }
 
 sub multi_union {
   my @ranges = @_;
+  my $opts;
+  if(ref $ranges[-1] eq 'HASH') {
+    $opts = option_mangler( pop @ranges );
+  }
+  return Number::Range::Regex::EmptyRange->new( $opts )  unless  @ranges;
   my $self = shift @ranges;
   $self = $self->union( $_ )  for  @ranges;
   return $self;
 }
 
 sub option_mangler {
-  my ($passed_opts) = @_;
+  my (@passed_opts) = grep { defined } @_;
+  return $Number::Range::Regex::Range::default_opts  unless  @passed_opts;
   # local options can override defaults
   my $opts;
-  if($passed_opts) {
-    die "too many arguments" unless ref $passed_opts eq 'HASH';
+  foreach my $opts_ref ( @passed_opts ) {
+    die "too many arguments from ".join(":", caller())." $opts_ref" unless ref $opts_ref eq 'HASH';
     # make a copy of options hashref, add overrides
-    $opts = { %{$Number::Range::Regex::Range::default_opts} };
-    while (my ($key, $val) = each %$passed_opts) {
+    while (my ($key, $val) = each %$opts_ref) {
       $opts->{$key} = $val;
     }
-  } else {
-    $opts = $Number::Range::Regex::Range::default_opts;
   }
   return $opts;
 }

@@ -2,13 +2,14 @@
 $|++;
 
 use strict;
-use Test::More tests => 326;
+use Test::More tests => 333;
 
 use lib "./t";
 use _nrr_test_util;
 
 use lib "./blib/lib";
 use Number::Range::Regex;
+use Number::Range::Regex::Util::inf qw ( neg_inf pos_inf );
 
 # test both ways, return true if both are true, false if both false, else die
 sub test_symmetrical {
@@ -21,13 +22,13 @@ sub test_symmetrical {
 }
 
 my $r;
-my $both = Number::Range::Regex::SimpleRange->new( '-inf', '+inf' );
-my $le_3 = Number::Range::Regex::SimpleRange->new( '-inf', 3 );
-my $le_4 = Number::Range::Regex::SimpleRange->new( '-inf', 4 );
-my $le_5 = Number::Range::Regex::SimpleRange->new( '-inf', 5 );
-my $ge_3 = Number::Range::Regex::SimpleRange->new( 3, '+inf' );
-my $ge_4 = Number::Range::Regex::SimpleRange->new( 4, '+inf' );
-my $ge_5 = Number::Range::Regex::SimpleRange->new( 5, '+inf' );
+my $both = Number::Range::Regex::SimpleRange->new( neg_inf, pos_inf );
+my $le_3 = Number::Range::Regex::SimpleRange->new( neg_inf, 3 );
+my $le_4 = Number::Range::Regex::SimpleRange->new( neg_inf, 4 );
+my $le_5 = Number::Range::Regex::SimpleRange->new( neg_inf, 5 );
+my $ge_3 = Number::Range::Regex::SimpleRange->new( 3, pos_inf );
+my $ge_4 = Number::Range::Regex::SimpleRange->new( 4, pos_inf );
+my $ge_5 = Number::Range::Regex::SimpleRange->new( 5, pos_inf );
 
 ok($both->contains($_)) for(-1,0,1);
 ok($le_3->contains($_)) for(-1..3);
@@ -234,15 +235,15 @@ ok($r->to_string eq '-inf..+inf');
 
 # check for infiniterange creation with range() via undef/'-inf'/'+inf'
 ok(range( 3, undef )->to_string eq '3..+inf');
-ok(range( 3, '+inf' )->to_string eq '3..+inf');
+ok(range( 3, pos_inf )->to_string eq '3..+inf');
 ok(range( 3, 'inf' )->to_string eq '3..+inf');
 ok(range( -3, undef )->to_string eq '-3..+inf');
-ok(range( -3, '+inf' )->to_string eq '-3..+inf');
+ok(range( -3, pos_inf )->to_string eq '-3..+inf');
 ok(range( -3, 'inf' )->to_string eq '-3..+inf');
 ok(range( undef, -3 )->to_string eq '-inf..-3');
-ok(range( '-inf', -3 )->to_string eq '-inf..-3');
+ok(range( neg_inf, -3 )->to_string eq '-inf..-3');
 ok(range( undef, 3 )->to_string eq '-inf..3');
-ok(range( '-inf', 3 )->to_string eq '-inf..3');
+ok(range( neg_inf, 3 )->to_string eq '-inf..3');
 
 # check for infiniterange creation with rangespec()
 $r = rangespec('-inf..-2');
@@ -268,3 +269,14 @@ ok(!range(-3, 3)->is_infinite() );
 ok( rangespec('-inf..-2,2..4,6..8,10..12')->is_infinite());
 ok( rangespec('2..4,6..8,10..12,14..+inf')->is_infinite());
 ok(!rangespec('2..4,6..8,10..12')->is_infinite());
+
+$r = Number::Range::Regex::EmptyRange->new();
+ok( $r );
+$r = $r->invert;
+ok( $r );
+ok( $r->is_infinite() );
+ok( $r->to_string eq '-inf..+inf' );
+$r = $r->invert;
+ok( $r );
+ok(!$r->is_infinite() );
+ok( $r->to_string eq '' );

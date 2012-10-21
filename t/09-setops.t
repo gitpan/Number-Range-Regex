@@ -2,7 +2,7 @@
 $|++;
 
 use strict;
-use Test::More tests => 773;
+use Test::More tests => 785;
 
 use lib "./t";
 use _nrr_test_util;
@@ -13,7 +13,7 @@ use Number::Range::Regex::Util qw (multi_union );
 
 my ($sr1, $sr2, $r1, $r2, $r, $re);
 
-$sr1 = Number::Range::Regex::TrivialRange->new(3, 9, '[3-9]');
+$sr1 = Number::Range::Regex::TrivialRange->new(3, 9);
 ok($sr1);
 ok($sr1->to_string eq '3..9');
 $r = $sr1->not();
@@ -72,7 +72,7 @@ $r = $r->not();
 ok($r->to_string eq '-inf..2,12..+inf');
 
 # sr1 = 3..9
-$sr2 = Number::Range::Regex::TrivialRange->new(6, 8, '[6-8]');
+$sr2 = Number::Range::Regex::TrivialRange->new(6, 8);
 ok($sr2);
 ok($sr2->to_string eq '6..8');
 $r = $sr2->not();
@@ -132,12 +132,12 @@ ok($sr1->union($sr2)->minus($sr1->intersection($sr2))->to_string eq $r->to_strin
 $r = $r->not();
 ok($r->to_string eq '-inf..2,6..8,10..+inf');
 
-$sr1 = Number::Range::Regex::TrivialRange->new(100, 109, '10[0-9]');
+$sr1 = Number::Range::Regex::TrivialRange->new(100, 109);
 ok($sr1);
 ok($sr1->to_string eq '100..109');
 $r = $sr1->not();
 ok($r->to_string eq '-inf..99,110..+inf');
-$sr2 = Number::Range::Regex::TrivialRange->new(120, 129, '12[0-9]');
+$sr2 = Number::Range::Regex::TrivialRange->new(120, 129);
 ok($sr2);
 ok($sr2->to_string eq '120..129');
 $r = $sr2->not();
@@ -166,7 +166,7 @@ $r = $r->not();
 ok($r->to_string eq '-inf..+inf');
 
 # tr2 = 120..129
-$sr1 = Number::Range::Regex::TrivialRange->new(110, 189, '1[1-8]\d');
+$sr1 = Number::Range::Regex::TrivialRange->new(110, 189);
 ok($sr1);
 ok($sr1->to_string eq '110..189');
 ok($sr1->touches($sr2));
@@ -197,7 +197,7 @@ $r = $r->not();
 ok($r->to_string eq '-inf..119,130..+inf');
 
 # tr2 = 120..129
-$sr1 = Number::Range::Regex::TrivialRange->new(190, 199, '19[0-9]');
+$sr1 = Number::Range::Regex::TrivialRange->new(190, 199);
 ok($sr1);
 ok($sr1->to_string eq '190..199');
 ok(!$sr1->touches($sr2));
@@ -623,6 +623,34 @@ ok( !$r->contains($_) ) for ( 1,3,4,6,7,9 );
 ok($r->not->to_string eq '-inf..-1,1,3..4,6..7,9..+inf');
 ok($near5->union($mul2)->minus($near5->intersection($mul2))->to_string eq $r->to_string); #a xor b = (a u b) - (a int b)
 
+$r = rangespec( '-1..2,4..5,8..9,14' )->invert();
+ok( $r->to_string eq '-inf..-2,3,6..7,10..13,15..+inf' );
+$r = rangespec( '2..5,10..+inf' )->invert();
+ok( $r->to_string eq '-inf..1,6..9' );
+$r = rangespec( '-10..-5,-2..+inf' )->invert();
+ok( $r->to_string eq '-inf..-11,-4..-3' );
+$r = rangespec( '-inf..-10,-5..-2' )->invert();
+ok( $r->to_string eq '-9..-6,-1..+inf' );
+$r = rangespec( '-inf..2,5..10' )->invert();
+ok( $r->to_string eq '3..4,11..+inf' );
+$r = rangespec( '-1..2,4..5,8..9,14' )->xor( rangespec('-inf..+inf', {allow_wildcard => 1} ) );
+ok( $r->to_string eq '-inf..-2,3,6..7,10..13,15..+inf' );
+$r = rangespec( '-1..2,4..5,8..9,14' )->xor( rangespec('-inf..6') );
+ok( $r->to_string eq '-inf..-2,3,6,8..9,14');
+$r = rangespec( '-21..-18,-16..-15,-12..-11,-6' )->xor( rangespec('-inf..-9') );
+ok( $r->to_string eq '-inf..-22,-17,-14..-13,-10..-9,-6');
+$r = rangespec( '-1..2,4..5,8..9,14' )->xor( rangespec('6..+inf') );
+ok( $r->to_string eq '-1..2,4..7,10..13,15..+inf' );
+$r = rangespec( '-21..-18,-16..-15,-12..-11,-6' )->xor( rangespec('-14..+inf') );
+ok( $r->to_string eq '-21..-18,-16..-13,-10..-7,-5..+inf' );
+
+$r = rangespec( '-1..2,4..5,8..9,14' );
+$r = $r->xor( rangespec( '-22..-15,-11,-8..4,8..10' ) );
+ok( $r->to_string eq '-22..-15,-11,-8..-2,3,5,10,14' );
+$r = rangespec( '-17..-16,4,6..9,10' );
+$r = $r->xor( rangespec( '-15,-11..-3,10..14,17' ) );
+ok( $r->to_string eq '-17..-15,-11..-3,4,6..9,11..14,17' );
+
 # test implicit range collapsing
 $r = rangespec( '1..2,3,4..5,6,7..8' );
 ok($r);
@@ -636,3 +664,4 @@ ok( $r->to_string eq '1..8' );
 my @ranges = (range( 1, 2 ), range(3, 3));
 @ranges = Number::Range::Regex::CompoundRange::_collapse_ranges( @ranges );
 ok(@ranges == 1);
+

@@ -1,5 +1,21 @@
 Revision history for Perl extension Number::Range::Regexp
 
+0.31 Oct 21 14:34:26 EDT 2012 r3171
+   - various fixes and tests for negative numbers
+   - init_opts defaults to default_opts, not empty hashref
+   - save opts given at new() time in $self
+   - add tests for invert(empty) == universal and invert(universal) == empty
+   - fix bug in invert() on ranges not bounded with a max
+   - multi_union() now returns an empty_range when given no arguments
+   - fix some hard to track down edge cases in sectionify() that were
+     triggered e.g. when doing set ops on ranges that touched but did
+     not overlap
+   - handle buggy rangespecs appropriately (eg "-3 -2..-1")
+   - start using inf.pm to fix bugs with non-libc glibc (win32 and solaris
+     at least):
+       http://www.cpantesters.org/cpan/report/5e73b674-6ca0-1014-9aa7-d95518fa49ba
+       http://www.cpantesters.org/cpan/report/f432d580-1921-11e2-bdcc-373e3b6b8117
+
 0.30 Oct 17 11:41:24 EDT 2012 r3143
    - support for rangespec() with arguments of '-inf', '+inf'
    - implement & document is_infinite()

@@ -45,7 +45,7 @@ if( has_regex_overloading() ) {
   ok(strip_regex_bloat( "$sr" ) eq strip_regex_bloat( qr/$sr/ ) );
 }
 
-my $tr = Number::Range::Regex::TrivialRange->new( 130, 179, '1[3-7]\d' );
+my $tr = Number::Range::Regex::TrivialRange->new( 130, 179 );
 ok($tr); #boolean context
 ok( !/^$tr$/ ) for( 129,180 ); #regex context
 ok( /^$tr$/ ) for( 130..179 ); #regex context (part 2)
