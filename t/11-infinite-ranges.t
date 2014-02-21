@@ -64,7 +64,7 @@ foreach my $ge_a ( $ge_3, $ge_4, $ge_5 ) {
     ok( test_symmetrical($ge_a, $ge_b, 'overlaps') );
   }
 }
-    
+
 ok( test_symmetrical($ge_3, $le_3, 'touches') );
 ok( test_symmetrical($ge_3, $le_3, 'overlaps') );
 ok( test_symmetrical($ge_3, $le_4, 'touches') );
@@ -87,11 +87,11 @@ ok( test_symmetrical($ge_5, $le_5, 'touches') );
 ok( test_symmetrical($ge_5, $le_5, 'overlaps') );
 
 #IR->union( SR ) tests
-$r = $both->union( Number::Range::Regex::EmptyRange->new() );
+$r = $both->union( Number::Range::Regex::CompoundRange->new() );
 ok($r->to_string eq $both->to_string);
-$r = $le_5->union( Number::Range::Regex::EmptyRange->new() );
+$r = $le_5->union( Number::Range::Regex::CompoundRange->new() );
 ok($r->to_string eq $le_5->to_string);
-$r = $ge_5->union( Number::Range::Regex::EmptyRange->new() );
+$r = $ge_5->union( Number::Range::Regex::CompoundRange->new() );
 
 ok($r->to_string eq $ge_5->to_string);
 $r = $le_5->union( range(2, 4) );
@@ -262,7 +262,7 @@ $r = rangespec('-inf..-77,-42..42,77..+inf');
 ok($r->to_string eq '-inf..-77,-42..42,77..+inf');
 
 # tests of is_infinite()
-ok(!Number::Range::Regex::EmptyRange->new()->is_infinite());
+ok(!Number::Range::Regex::CompoundRange->new()->is_infinite());
 ok( range(undef, 3)->is_infinite() );
 ok( range(-3, undef)->is_infinite() );
 ok(!range(-3, 3)->is_infinite() );
@@ -270,7 +270,7 @@ ok( rangespec('-inf..-2,2..4,6..8,10..12')->is_infinite());
 ok( rangespec('2..4,6..8,10..12,14..+inf')->is_infinite());
 ok(!rangespec('2..4,6..8,10..12')->is_infinite());
 
-$r = Number::Range::Regex::EmptyRange->new();
+$r = Number::Range::Regex::CompoundRange->new();
 ok( $r );
 $r = $r->invert;
 ok( $r );

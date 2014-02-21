@@ -2,7 +2,7 @@
 $|++;
 
 use strict;
-use Test::More tests => 137;
+use Test::More tests => 128;
 
 use lib "./t";
 use _nrr_test_util;
@@ -46,16 +46,5 @@ foreach my $l_pos (0..$#order) {
     }
   }
 }
-
-ok( -3 == most { $a == -3 ? 1 : undef } ( 42, -3, 22 ) );
-ok( 22 == most { $a == 22 ? 1 : undef } ( 42, -3, 22 ) );
-ok( 42 == most { $a == 42 ? 1 : undef } ( 42, -3, 22 ) );
-
-ok( -41    == min( -3, 6,     42,    -41, 17 ) );
-ok(  42    == max( -3, 6,     42,    -41, 17 ) );
-ok( -41    == min( -3, 6, pos_inf,    -41, 17 ) );
-ok(  42    == max( -3, 6,     42, neg_inf, 17 ) );
-ok( neg_inf == min( -3, 6, pos_inf, neg_inf, 17 ) );
-ok( pos_inf == max( -3, 6, pos_inf, neg_inf, 17 ) );
 
 # note: option_mangler, multi_union, has_re_overloading tested elsewhere

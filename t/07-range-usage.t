@@ -125,7 +125,7 @@ ok($range);
 ok($range->to_string eq '100..104');
 ok($range->regex);
 ok(test_range_regex(100, 104, $range->regex));
-ok(check_type($range, 'Simple' ));
+ok(check_type($range, 'Simple'));
 
 $range = $range->union( range(106, 109) );
 ok($range);
@@ -133,21 +133,21 @@ ok($range->to_string eq '100..104,106..109');
 ok($range->regex);
 ok(test_range_regex(100, 104, $range->regex));
 ok(test_range_regex(106, 109, $range->regex));
-ok(check_type($range, 'Compound' ));
+ok(check_type($range, 'Compound'));
 
 $range = $range->union( range(104, 106) );
 ok($range);
 ok($range->to_string eq '100..109');
 ok($range->regex);
 ok(test_range_regex(100, 109, $range->regex));
-ok(check_type($range, 'Simple' ));
+ok(check_type($range, 'Simple'));
 
 $range = range(99, 104);
 ok($range);
 ok($range->to_string eq '99..104');
 ok($range->regex);
 ok(test_range_regex(99, 104, $range->regex));
-ok(check_type($range, 'Simple' ));
+ok(check_type($range, 'Simple'));
 
 $range = $range->union( range(106, 109) );
 ok($range);
@@ -155,35 +155,35 @@ ok($range->to_string eq '99..104,106..109');
 ok($range->regex);
 ok(test_range_regex(99, 104, $range->regex));
 ok(test_range_regex(106, 109, $range->regex));
-ok(check_type($range, 'Compound' ));
+ok(check_type($range, 'Compound'));
 
 $range = $range->union( range(105, 105) );
 ok($range);
 ok($range->to_string eq '99..109');
 ok($range->regex);
 ok(test_range_regex(99, 109, $range->regex));
-ok(check_type($range, 'Simple' ));
+ok(check_type($range, 'Simple'));
 
 $range = range(3, 37);
 ok($range);
 ok($range->to_string eq '3..37');
-ok(check_type($range, 'Simple' ));
+ok(check_type($range, 'Simple'));
 $range = $range->union( range(40,50) );
 ok($range);
 ok($range->to_string eq '3..37,40..50');
-ok(check_type($range, 'Compound' ));
+ok(check_type($range, 'Compound'));
 $range = $range->union( range(82, 92) );
 ok($range->to_string eq '3..37,40..50,82..92');
 ok($range);
 my $rlength = length($range->regex);
-ok(check_type($range, 'Compound' ));
+ok(check_type($range, 'Compound'));
 $range = $range->union( range(61, 71) );
 ok($range->to_string eq '3..37,40..50,61..71,82..92');
 ok($range);
-ok(check_type($range, 'Compound' ));
+ok(check_type($range, 'Compound'));
 $range = $range->union( range(7, 85) );
 ok($range);
 ok($range->to_string eq '3..92');
 ok($rlength > length($range->regex));
-ok(check_type($range, 'Simple' ));
+ok(check_type($range, 'Simple'));
 

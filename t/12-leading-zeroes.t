@@ -11,7 +11,7 @@ use lib "./blib/lib";
 use Number::Range::Regex;
 
 my ($r1, $r2);
-$r1 = rangespec('-inf..+inf', {allow_wildcard => 1, no_leading_zeroes => 0});
+$r1 = rangespec('-inf..+inf', {no_leading_zeroes => 0});
 ok($r1);
 ok(-99    =~ /^$r1$/);
 ok("-099" =~ /^$r1$/);
@@ -29,7 +29,7 @@ ok($r2);
 ok($r1->regex eq $r2->regex);
 ok($r1->to_string eq $r2->to_string);
 
-$r1 = rangespec('-inf..+inf', {allow_wildcard => 1, no_leading_zeroes => 1});
+$r1 = rangespec('-inf..+inf', {no_leading_zeroes => 1});
 ok($r1);
 ok(-99    =~ /^$r1$/);
 ok("-099" !~ /^$r1$/);

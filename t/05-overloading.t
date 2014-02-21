@@ -12,15 +12,16 @@ use Number::Range::Regex qw ( range rangespec );
 use Number::Range::Regex::Util;
 
 if( has_regex_overloading() ) {
-  plan tests => 492;
+  plan tests => 493;
 } else {
-  plan tests => 492;
+  plan tests => 493;
   my $yours = defined $overload::VERSION ? $overload::VERSION : '[unversioned]';
   diag "NOTE: overloading in regex context requires overload.pm version >= 1.10 (yours is $yours), will always overload as string";
 }
 
-my $er = Number::Range::Regex::EmptyRange->new();
+my $er = Number::Range::Regex::Range->empty_set();
 ok($er); #in boolean context, should return the object
+ok($er->regex);
 ok( !/^$er$/ ) for( 0,1,-1,"foo" ); #in regex context, a pattern that never matches
 ok( !/$er/ ) for( 0,1,-1,"foo" ); #regex context (part 2)
 if( has_regex_overloading() ) {

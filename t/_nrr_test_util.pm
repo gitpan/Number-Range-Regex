@@ -3,24 +3,47 @@ $|++;
 
 use strict;
 
-# usage: specify the types a range is - the range must NOT be
-# of any type you do not mention (except NRR::Range), so e.g.:
-#  check_type($range, 'Simple, Trivial' );
-# checks for !Empty, !Compound. a TrivialRange should match. so:
-#  check_type( $trivial, 'Trivial' ) -> returns false (also a Simple)
-#  check_type( $trivial, 'Simple' ) -> returns false (also a Trivial)
-# also note check_type($r, "foo bar") == check_type($r, qw ( foo bar ) );
+use Test::More;
+
+#usage: check_type($range, type_str, is_infinite, is_empty);
+# type should be one of 'Compound', 'Simple', or 'Trivial'
+#   note: other checks will fill in, for example, if you check
+#   for 'Trivial', we will also check Simple and !Compound
+# if you don't care what type, e.g. check_type($r, undef, 0, 1);
 sub check_type {
-  my ($range, @yes_types) = @_;
-  @yes_types = map { s/^\s*//; s/\s*$//; $_ } map { split /,/, $_ } @yes_types;
-  my %types;
-  $types{$_} = 0  for  ( qw ( Empty Simple Trivial Compound ) );
-  $types{$_} = 1  for  ( '', map { s/^(.)/\u$1/; $_ } @yes_types );
+  my ($range, $type, $infinite, $empty) = @_;
   my $ret = 1;
+  my $got;
+
+  $got = $range->is_infinite() ? 1 : 0;
+  if(defined $infinite && $infinite != $got) {
+    warn "check_type: inifiniteness: expected $infinite, got: $got";
+    $ret = 0;
+  }
+  $got = $range->is_empty() ? 1 : 0;
+  if(defined $empty && $empty != $got) {
+    warn "check_type: emptiness: expected $empty, got: $got";
+    $ret = 0;
+  }
+
+  my %types;
+  $type = defined $type ? $type : ''; #dont warn about undef
+  if($type eq 'Compound') {
+    @types{qw(Compound Simple Trivial)} = (1, 0, 0);
+  } elsif($type eq 'Trivial') {
+    @types{qw(Compound Simple Trivial)} = (0, 1, 1);
+  } elsif($type eq 'Simple') {
+    @types{qw(Compound Simple Trivial)} = (0, 1, 0);
+  }
+
+  if ( ! $range->isa( 'Number::Range::Regex::Range' ) ) {
+    warn "check_type: isa(Range): expected 1, got: 0";
+  }
   foreach my $key (keys %types) {
     my $type = $key;
-    if ( $range->isa( "Number::Range::Regex::${type}Range" ) != $types{$key} ) {
-      warn "check_type: error: range is not a ${type}Range";
+    $got = $range->isa("Number::Range::Regex::${type}Range") ? 1 : 0;
+    if ( $got != $types{$key} ) {
+      warn "check_type: isa($type): expected $types{$key}, got: $got";
       $ret = 0;
     }
   }
@@ -77,7 +100,7 @@ sub test_range_random {
   return  if  ($max+1) =~ /^$range$/;
   warn "\ninfo (***safe to ignore***): range $range seems to have worked for [$min..$max] in $trials trials (/***safe to ignore***)\n"  if  $verbose;
 #  warn "\ninfo (***safe to ignore***): range $range seems to have worked for [$min..$max] in $trials trials. tested: ".join(", ", sort @tests)." (/***safe to ignore***)\n"  if  $verbose;
-  return $range; 
+  return $range;
 }
 
 sub test_range_partial {
@@ -87,7 +110,7 @@ sub test_range_partial {
   return  unless  $range;
   return  if  defined $min && ($min-1) =~ /^$range$/;
   return  if  defined $min && $min !~ /^$range$/;
-  foreach my $test (@tranges) { 
+  foreach my $test (@tranges) {
     my ($tmin, $tmax) = ($test->[0], $test->[1]);
     for(my $c=$tmin; $c<=$tmax; ++$c) {
       my $desired = 1;
@@ -102,7 +125,7 @@ sub test_range_partial {
   }
   return  if  defined $max && $max !~ /^$range$/;
   return  if  defined $max && ($max+1) =~ /^$range$/;
-  return $range; 
+  return $range;
 }
 
 sub test_range_exhaustive {
@@ -147,7 +170,30 @@ sub test_range_regex {
   return $regex;
 }
 
+## if we have perl > 5.8 we can temporarily reopen STDERR to a var,
+## use this function to do checks on stderr output. with perl <=
+## 5.8.0, we have no way to check stderr, so we just check the
+## return value, dump to stderr and hope for the best
 
+
+#sub ok_local_stderr(&$) { #ok_l_s { ... } qr/.../
+sub ok_local_stderr { # ok_l_s sub { ... }, qr/.../
+  my ($sub, $err_re) = @_;
+  my $ret;
+  if($^V gt v5.8.0) {
+    my $err = '';
+    local *STDERR;
+    open(STDERR, '>', \$err) or die "open: $!";
+    $ret = $sub->();
+    close STDERR;
+    ok( $ret && $err =~ /$err_re/ );
+  } else {
+    diag "please ignore the following warning!";
+    $ret = $sub->();
+    ok( $ret );
+  }
+  return $ret;
+}
 
 1;
 

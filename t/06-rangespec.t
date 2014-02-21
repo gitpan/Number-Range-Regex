@@ -4,7 +4,6 @@ $|++;
 use strict;
 use Test::More;
 
-
 use lib "./t";
 use _nrr_test_util;
 
@@ -13,7 +12,7 @@ use Number::Range::Regex qw ( range rangespec );
 
 my ($r, $re);
 
-plan tests => $^V ge v5.8.0 ? 120 : 119;
+plan tests => 121;
 
 $r = range( 3, 4 );
 ok(check_type($r, 'Simple'));
@@ -79,23 +78,9 @@ ok($@);
 eval { $r = rangespec( "3..2", { autoswap => 1 } ); };
 ok(!$@);
 
-# if we have perl > 5.8 we can temporarily reopen STDERR to a var
-# but don't warn "out loud" - redirect STDERR to variable
-# otherwise skip the test of passing a literal range as an argument
-# to rangespec and make sure we complain (but not out loud)
-if($^V gt v5.8.0) {
-  my $err;
-  local *STDERR;
-  open(STDERR, '>', \$err) or die "open: $!";
-  $r = rangespec( 3..6,9..11 );
-  ok(check_type($r, 'Compound'));
-  ok($err); # passed literal range to rangespec
-  close STDERR;
-} else {
-  diag "please ignore the following warning about passing a literal range to rangespec()";
-  $r = rangespec( 3..6,9..11 );
-  ok(check_type($r, 'Compound'));
-}
+ok_local_stderr( sub { $r = rangespec( 3..6,9..11 ) },
+                 qr  /passed literal range to rangespec/ );
+ok(check_type($r, 'Compound'));
 $re = $r->regex;
 ok( $_ =~ /^$re$/ ) for ( 3..6,9..11 );
 ok( $_ !~ /^$re$/ ) for ( 2,7..8,12 );
@@ -108,9 +93,8 @@ ok(check_type($r, 'Compound'));
 ok($r->to_string() eq '3..6,9..11');
 
 # various infinite ranges perform as expected
-$r = rangespec('-inf..+inf', {allow_wildcard => 1});
+$r = rangespec('-inf..+inf');
 ok($r);
-eval { $r = rangespec('+inf..+inf', {allow_wildcard => 1}); };
-ok($@);
-eval { $r = rangespec('-inf..-inf', {allow_wildcard => 1}); };
-ok($@);
+ok(-9 =~ /^$r$/);
+ok(0  =~ /^$r$/);
+ok(9  =~ /^$r$/);

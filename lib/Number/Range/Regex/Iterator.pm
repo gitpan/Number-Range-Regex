@@ -7,14 +7,14 @@
 package Number::Range::Regex::Iterator;
 
 use strict;
-use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION ); 
+use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION );
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter );
 
-$VERSION = '0.31';
+$VERSION = '0.32';
 
 use overload bool => \&in_range,
              '""' => sub { return $_[0] };
@@ -36,22 +36,22 @@ use overload bool => \&in_range,
 sub new {
   my ($class, $range) = @_;
 
-  my $self = bless { range => $range }, $class; 
+  my $self = bless { range => $range }, $class;
 
   if(!$range->isa('Number::Range::Regex::Range')) {
     die "unknown arg: $range, usage: Iterator->new( \$range )";
   }
-  if($range->isa('Number::Range::Regex::CompoundRange')) {
-    $self->{ranges} = $range->{ranges};
-  } elsif($range->isa('Number::Range::Regex::EmptyRange')) {
+  if($range->is_empty) {
     die "can't iterate over an empty range";
+  } elsif($range->isa('Number::Range::Regex::CompoundRange')) {
+    $self->{ranges} = $range->{ranges};
   } else { #SimpleRange
     $self->{ranges} = [ $range ];
-  } 
+  }
 
   $self->first()  if  $self->{ranges}->[0]->has_lower_bound;
 
-  return $self; 
+  return $self;
 }
 
 sub size {
@@ -102,7 +102,7 @@ sub first {
     }
   }
   $self->{out_of_range} = 0;
-  return $self; 
+  return $self;
 }
 
 sub last {
@@ -118,7 +118,7 @@ sub last {
     }
   }
   $self->{out_of_range} = 0;
-  return $self; 
+  return $self;
 }
 
 sub fetch {
@@ -153,7 +153,7 @@ sub next {
     $self->{number} = $new_r->{min};
   }
 #_dbg($self, "post-next: ");
-  return $self; 
+  return $self;
 }
 
 sub prev {
@@ -179,7 +179,7 @@ sub prev {
     $self->{number} = $new_r->{max};
   }
 #_dbg($self, "post-prev: ");
-  return $self; 
+  return $self;
 }
 
 sub in_range {
@@ -196,7 +196,7 @@ sub _dbg {
     $str .= " $key: $val,";
   }
   $str =~ s/,$//;
-  warn "$str\n"; 
+  warn "$str\n";
 }
 
 1;

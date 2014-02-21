@@ -2,13 +2,14 @@
 $|++;
 
 use strict;
-use Test::More tests => 186;
+use Test::More tests => 190;
 
 use lib "./t";
 use _nrr_test_util;
 
 use lib "./blib/lib";
 use Number::Range::Regex qw ( range rangespec );
+use Number::Range::Regex::Util;
 use Number::Range::Regex::Iterator;
 
 my ($it, $range);
@@ -143,9 +144,9 @@ ok($it->first->fetch == 1230);
 ok($it->next->fetch == 1231);
 ok($it->next->next->fetch == 1233);
 ok($it->next->next->next->next->next->next->fetch == 1239);
-eval { $it->next }; 
+eval { $it->next };
 ok(!$@);
-eval { $it->fetch }; 
+eval { $it->fetch };
 ok($@); # can't fetch() an out of range (overflow) iterator
 
 # test an emptyrange
@@ -280,3 +281,9 @@ ok($it->seek( 2**30 )->prev->fetch == 2**30-1);
 ok($it->seek( -2**30 )->next->fetch == -2**30+1);
 ok($it->seek( -2**30 )->prev->fetch == -2**30-1);
 
+$range = empty_set();
+ok($range);
+ok($range->to_string eq '');
+eval { $it = $range->iterator(); };
+ok($@);
+ok($@ =~ /iterate over an empty range/);

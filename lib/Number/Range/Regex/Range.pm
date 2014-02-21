@@ -7,30 +7,54 @@
 package Number::Range::Regex::Range;
 
 use strict;
-use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION $default_opts ); 
+use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION
+              $default_opts @STANDARD_DIGIT_ORDER );
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
 use base 'Exporter';
 @ISA = qw( Exporter );
 
-$VERSION = '0.31';
+$VERSION = '0.32';
 
 use Number::Range::Regex::CompoundRange;
-use Number::Range::Regex::EmptyRange;
 use Number::Range::Regex::SimpleRange;
 use Number::Range::Regex::TrivialRange;
 use Number::Range::Regex::Util;
 
 $default_opts = {
-  allow_wildcard => 0,
-  autoswap       => 0,
+  allow_wildcard    => 0,
+  autoswap          => 0,
+
+  base              => 10,
+
+  range_operator    => '..',
+  range_separator   => ',',
 
   no_leading_zeroes => 0,
   no_sign           => 0,
   comment           => 1,
   readable          => 0,
 };
+
+my $opt_aliases = {
+  'us_number'   => { digitgroup => { max => 999, separator => ',', padding => '0' } },
+
+  'dotted_quad' => 'ipv4',
+  'ipv4'        => { range_operator => '-', digitgroup => { max => 255, separator => '.', padding => '' } },
+
+  'mac_addr'    => 'mac_addr',
+  'mac'         => { base => 16, digitgroup => { max => 'ff', separator => ':', padding => '0' } },
+};
+
+
+while (my ($key, $value) = each %$opt_aliases) {
+  unless(ref $value) {
+    $opt_aliases->{$key} = $opt_aliases->{$value};
+  }
+}
+
+@STANDARD_DIGIT_ORDER = (0..9, 'a'..'z'); #TODO: maybe use constant?
 
 use overload bool => sub { return $_[0] },
              '""' => sub { return $_[0]->overload_string() },
@@ -44,11 +68,9 @@ use overload bool => sub { return $_[0] },
 # first, you're probably doing something wrong...
 sub _equals {
   my ($a, $b) = @_;
-#  $a = $a->to_string()  if  ref($a) =~ /^Number::Range::Regex::.*Range$/;
-#  $b = $b->to_string()  if  ref($b) =~ /^Number::Range::Regex::.*Range$/;
-  $a = $a->to_string()  if  ref($a);
-  $b = $b->to_string()  if  ref($b);
-  return $a eq $b;  
+  $a = $a->to_string()  if  ref($a) && $a->isa('Number::Range::Regex::Range');
+  $b = $b->to_string()  if  ref($b) && $b->isa('Number::Range::Regex::Range');
+  return $a eq $b;
 }
 
 sub overload_string {
@@ -60,7 +82,7 @@ sub overload_string {
 }
 
 sub iterator {
-  my ($self) = @_;        
+  my ($self) = @_;
   return Number::Range::Regex::Iterator->new( $self );
 }
 
@@ -88,6 +110,7 @@ sub contains { die "called abstract Range->contains() on a ".ref($_[0]) }
 sub has_lower_bound { die "called abstract Range->has_lower_bound() on a ".ref($_[0]) }
 sub has_upper_bound { die "called abstract Range->has_upper_bound() on a ".ref($_[0]) }
 sub is_infinite { die "called abstract Range->is_infinite() on a ".ref($_[0]) }
+sub is_empty { die "called abstract Range->is_empty() on a ".ref($_[0]) }
 
 1;
 

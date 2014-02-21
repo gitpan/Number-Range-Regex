@@ -12,7 +12,7 @@ use Number::Range::Regex::Range;
 use Number::Range::Regex::Iterator;
 use Number::Range::Regex::Util;
 use Number::Range::Regex::Util::inf qw( neg_inf pos_inf );
-use vars qw ( @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $VERSION ); 
+use vars qw ( @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $VERSION );
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
@@ -22,11 +22,9 @@ use base 'Exporter';
 @EXPORT_OK = qw ( init regex_range ) ;
 %EXPORT_TAGS = ( all => [ @EXPORT, @EXPORT_OK ] );
 
-$VERSION = '0.31';
+$VERSION = '0.32';
 
 my $init_opts = $Number::Range::Regex::Range::default_opts;
-
-sub features { return { negative => 1 }; }
 
 sub init {
   my ($self, @opts) = @_;
@@ -47,74 +45,60 @@ sub init {
 #   regex_range(3, undef) yields the equivalent of qr/[+]?[3-9]|\d+/;
 sub regex_range {
   my ($min, $max, $passed_opts) = @_;
-
-  # TODO: make options_mangler a little smarter for this case so it takes a
-  #       default hashref arg.
-
-  my $opts;
-  if($passed_opts) {
-    die "regex_range: too many arguments" unless ref $passed_opts eq 'HASH';
-    $opts = { %$init_opts };
-    while (my ($key, $val) = each %$passed_opts) {
-      $opts->{$key} = $val;
-    }
-  } else {
-    $opts = $init_opts;
-  }
-
+  my $opts = option_mangler( $init_opts, $passed_opts );
   return range($min, $max, $opts)->regex();
 }
 
 sub range {
-  my ($min, $max, $opts) = @_;
-  my $range;
+  my $opts = option_mangler( ref $_[-1] eq 'HASH' ? pop : undef );
+  my ($min, $max) = @_;
+  if(!defined $min && !defined $max) {
+    die "for the set of all integers, you must specify min as '-inf' and max as '+inf', or use the allow_wildcard argument" if !$opts->{allow_wildcard};
+  }
   $min = neg_inf  if  !defined $min;
   $max = pos_inf  if  !defined $max;
-  if($min == neg_inf && $max == pos_inf) {
-    die "must specify either a min or a max or use the allow_wildcard argument" if !$opts->{allow_wildcard};
-  }
-  return Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
+  return rangespec( "$min..$max", $opts );
 }
 
 sub rangespec {
-  my $opts;
-  if(ref $_[-1]) {
-    $opts = option_mangler( pop );
-  }
+  my $opts = option_mangler( ref $_[-1] eq 'HASH' ? pop : undef );
   # we allow (but do not like) e.g. rangespec(5,7,10..18);
   # we don't like it because it can make us run out of memory for
   # large ranges. preferred: rangespec('5,7,10..18');
-  my $range;
+  my $spec;
   if(@_ > 1) {
     warn "passed literal range to rangespec!\n";
-    $range = join ',', @_;
+    $spec = join $opts->{range_separator}, @_;
   } else {
-    $range = $_[0];
+    $spec = $_[0];
   }
 
-  my $section_validate  = qr/(?:-?\d+|(?:-?\d+|-inf)\.\.(?:\+?inf|-?\d+))/;
-  my $range_validate = qr/(?:|$section_validate(?:,\s*$section_validate)*)/;
-  die "invalid rangespec '$range'"  unless  $range =~ /^$range_validate$/;
+  my $base = $opts->{base};
+  my $base_digits = base_digits($base);
+  my $base_max   = substr($base_digits, -1);
 
-  my @sections = split /,\s*/, $range;
+  my $digits_validate  = "[$base_digits]+";
+  my $range_operator   = '\s*'.quotemeta( $opts->{range_operator} ).'\s*';
+  my $range_separator  = '\s*'.quotemeta( $opts->{range_separator} ).'\s*';
+  my $section_validate = qr/(?:-?$digits_validate|(?:-?$digits_validate|-inf)$range_operator(?:\+?inf|-?$digits_validate))/;
+  my $range_validate   = qr/(?:|$section_validate(?:$range_separator$section_validate)*)/;
+  die "invalid rangespec '$spec' !~ /$range_validate/"  unless  $spec =~ /^$range_validate$/;
+
+  my @sections = split /$range_separator/, $spec;
   my @ranges;
   foreach my $section (@sections) {
-    if($section =~ /^(-?\d+)$/) {
+    if($section =~ /^(-?$digits_validate)$/) {
       push @ranges, Number::Range::Regex::SimpleRange->new( $1, $1, $opts );
     } else {
-      my ($min, $max) = split /\.\./, $section, 2;
-      if($min == neg_inf && $max == pos_inf && !$opts->{allow_wildcard}) {
-        die "must specify either a min or a max or use the allow_wildcard argument";
-      }
-      $min = neg_inf  if  $min eq '-inf';
-      $max = pos_inf  if  $max eq '+inf';
+      my ($min, $max) = map { s/^\s+//; s/\s+$//; $_ } split /$range_operator/, $section, 2;
       push @ranges, Number::Range::Regex::SimpleRange->new( $min, $max, $opts );
     }
   }
+  my $warn_overlap = defined $opts->{warn_overlap} ?
+                     $opts->{warn_overlap} : 'rangespec';
   # note: multi_union() will have the side effect of sorting
   #       and de-overlap-ify-ing the input ranges
-  return Number::Range::Regex::EmptyRange->new( $opts )  if  !@ranges;
-  return multi_union( @ranges );
+  return multi_union( @ranges, { warn_overlap => $warn_overlap } );
 }
 
 1;
@@ -153,7 +137,7 @@ Number::Range::Regex - create regular expressions that check for
   if( $nonprimes_lt_10->contains( $something ) ) {
     print "something($something) is a nonprime less than 10";
   }
-  
+
   my $octet = range(0, 255);
   my $ip4_match = qr/^$octet\.$octet\.$octet\.$octet$/;
   my $range_96_to_127 = range(96, 127);
@@ -167,7 +151,7 @@ Number::Range::Regex - create regular expressions that check for
   do { print $it->fetch } while ($it->next);
   $it->last;
   do { print $it->fetch } while ($it->prev);
-  
+
 
 =head1 DESCRIPTION
 
@@ -232,7 +216,7 @@ it returns a false value. e.g.
   rangespec('7..9')->overlaps( rangespec('10..12') ) => false
   rangespec('7..9')->overlaps( rangespec('6..10') )  => true
   rangespec('7..9')->overlaps( rangespec('6..7') )   => true
-  
+
 
 =back
 
@@ -242,7 +226,7 @@ it returns a false value. e.g.
 
 =item to_string
 
-  $range->to_sting();
+  $range->to_string();
 
 Return a compact representation of the range suitable for consumption
 by a human, perl(1), or rangespec(). For example:
@@ -280,7 +264,7 @@ works in all versions of perl >= v5.6.0. When it is further
 possible to distinguish regex context from string context (as
 in overload v1.10 or higher, available in perl >= v5.12.0),
 range objects will display in string but not regex context as
-the terser, more legible $range->to_string() instead. 
+the terser, more legible $range->to_string() instead.
 
 If you find any cryptic errors about overloading, please use
 an explicit ->to_string or ->regex() and file a bug.
@@ -301,19 +285,18 @@ Similarly the set of all integers greater than 17:
   range( 17, '+inf' );
   rangespec('17..+inf');
 
-It is not, however, possible to specify the set of all integers by default.
-If you try to do so, Number::Range::Regex will complain that you
-"must specify either a min or a max or use the allow_wildcard argument":
+Note carefully that, in order to prevent errors, it is not possible to
+specify the set of all integers via range(undef, undef). If you try to
+do so, Number::Range::Regex will complain that you "must specify either
+a min or a max or use the allow_wildcard argument":
 
-  rangespec('-inf..+inf') #boom
-  range( undef, '+inf' )  #boom
-  range( undef, undef )   #boom
-  range( '-inf', undef )  #let's go back to my room
+  range( undef, undef );   #boom
 
-however, the error you receive suggests the solution if you really
-want such a range:
+If you really want range() with no defined arguments to mean the set of
+all possible integers, you can use one of the below:
 
-  range( '-inf', '+inf', {allow_wildcard => 1} ) 
+  range( undef, undef, {allow_wildcard => 1} ) ;
+  range( '-inf', '+inf' );
 
 To test if a range is infinite, you can call is_infinite():
 
@@ -397,9 +380,9 @@ for more information, see Number::Range::Regex::Iterator
 
 =head2 OTHER METHODS
 
-=item regex_range
-
 =over
+
+=item regex_range
 
   $regex = regex_range( $min, $max );
 

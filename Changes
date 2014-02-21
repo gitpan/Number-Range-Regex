@@ -1,5 +1,24 @@
 Revision history for Perl extension Number::Range::Regexp
 
+0.32 Feb 21 14:29:26 EDT 2014 r3804
+   - doc fix: to_string was misspelled. Thanks to George Wood of Qualcomm
+     for the report.
+   - support for non-10 bases between 2 and 16, so you can say eg:
+       rangespec('8c..c8', {base => 16})->regex
+     and get something like:
+       / 8[c-f] | [9-b][\da-f] | c[0-8] /
+   - lots of internal reorganization, dead code trimming, simplification,
+     golfing, futureproofing, and nice-ification of code
+   - fix behavior of iterators on empty ranges
+   - eliminate EmptyRange.pm, add is_empty()
+   - introduce handle-deprecated-cruft.pl to overwrite any old pms
+     that are no longer used
+   - fix bug in _collapse_ranges when collapsing twice in a row
+   - $opts->{allow_wildcard} no longer not necessary with rangespec()
+     or range() called with explicit arguments ('-inf', '+inf').
+     allow_wildcard is only necessary when called as range( undef, undef )
+     ( which looks like range() )
+
 0.31 Oct 21 14:34:26 EDT 2012 r3171
    - various fixes and tests for negative numbers
    - init_opts defaults to default_opts, not empty hashref

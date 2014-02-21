@@ -2,7 +2,7 @@
 $|++;
 
 use strict;
-use Test::More tests => 321;
+use Test::More tests => 326;
 
 use lib "./t";
 use _nrr_test_util;
@@ -10,7 +10,6 @@ use _nrr_test_util;
 use lib "./blib/lib";
 use Number::Range::Regex qw ( regex_range );
 
-my $features = Number::Range::Regex::features();
 my $range;
 
 # test option management (via commenting option)
@@ -25,20 +24,20 @@ eval { Number::Range::Regex->init( comment => 0 ); };
 ok(!$@); # called init without dying
 $range = regex_range( 3, 4 );
 ok($range);
-ok($range !~ /[?][#]/); 
+ok($range !~ /[?][#]/);
 $range = regex_range( 3, 4, {comment => 1} );
 ok($range);
-ok($range =~ /[?][#]/); 
+ok($range =~ /[?][#]/);
 
 # call init( {comment => 1} ) (new format w/ hashref), check commenting
 eval { Number::Range::Regex->init( { comment => 1 } ); };
 ok(!$@); # called init without dying
 $range = regex_range( 3, 4 );
 ok($range);
-ok($range =~ /[?][#]/); 
+ok($range =~ /[?][#]/);
 $range = regex_range( 3, 4, {comment => 0} );
 ok($range);
-ok($range !~ /[?][#]/); 
+ok($range !~ /[?][#]/);
 
 # tests for explicit comment => 0 vs comment => 1 differences
 my $range_uncommented = regex_range( 3, 59, { comment => 0 } );
@@ -82,10 +81,17 @@ ok(13 !~ /^$range$/);
 
 # tests for regex_range(undef, undef) aka "wildcarding"
 eval { regex_range() }; ok($@); # must specify at least a min or a max
+ok($@);
 my $wildcard_range = eval { regex_range( undef, undef, { allow_wildcard => 1 } ) };
 ok(!$@);
 ok($wildcard_range);
-ok( $features->{negative} ? "-90" =~ /^$wildcard_range$/ : 1 );
+$wildcard_range = eval { regex_range( '-inf', undef, {allow_wildcard => 0 } ) };
+ok(!$@);
+ok($wildcard_range);
+$wildcard_range = eval { regex_range( undef, '+inf', {allow_wildcard => 0 } ) };
+ok(!$@);
+ok($wildcard_range);
+ok( "-90" =~ /^$wildcard_range$/ );
 ok( "67" =~ /^$wildcard_range$/ );
 ok( "+67" =~ /^$wildcard_range$/ );
 ok( "0" =~ /^$wildcard_range$/ );
@@ -339,7 +345,6 @@ my $ss = $start-5;
 $ss = 0  if  $ss < 0;
 $range = test_range_partial($start, $end, [$ss, $start+5], [$end-5, $end+5] );
 ok($range);
-$range = test_range_partial
 # test a spread that involves a lot of digit boundary crossings
 $end   = int rand $MAX_INT;
 my $log_end = log($end)/log(10);

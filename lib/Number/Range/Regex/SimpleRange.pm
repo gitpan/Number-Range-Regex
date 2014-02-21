@@ -9,52 +9,79 @@ package Number::Range::Regex::SimpleRange;
 # a contiguous, finite range, can be expressed as an array of TrivialRange
 
 use strict;
-use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION ); 
+use vars qw ( @ISA @EXPORT @EXPORT_OK $VERSION );
 eval { require warnings; }; #it's ok if we can't load warnings
 
 require Exporter;
 use base 'Exporter';
 @ISA    = qw( Exporter Number::Range::Regex::Range );
 
-$VERSION = '0.31';
+$VERSION = '0.32';
 
 use Number::Range::Regex::Util ':all';
-use Number::Range::Regex::Util::inf qw( neg_inf pos_inf is_inf );
+use Number::Range::Regex::Util::inf qw( neg_inf pos_inf inf_type _is_negative _pad );
 
 sub new {
   my ($class, $min, $max, $passed_opts) = @_;
 
   my $opts = option_mangler( $passed_opts );
 
-  die 'internal error undefined min and max from caller: '.join(":", caller) if !( defined $min && defined $max );
+  die 'internal error: undefined min and max from caller: '.join(":", caller) if !( defined $min && defined $max );
 
-  die "min ($min) must be an integer or /^[+-]?inf$/"  if  $min !~ /^[-+]?(?:inf|\d+)$/;
-  die "max ($max) must be an integer or /^[+-]?inf$/"  if  $max !~ /^[-+]?(?:inf|\d+)$/;
+  my $base = $opts->{base};
+  my $base_digits = $opts->{base_digits} = base_digits($base);
+  my $base_max    = $opts->{base_max}    = substr($base_digits, -1);
+  my $base_digits_regex = $opts->{base_digits_regex} = _calculate_digit_range( 0, $base_max, $base_digits );
 
+  die "min ($min) must be a base $opts->{base} integer or /^[+-]?inf\$/"  if  $min !~ /^[-+]?(?:inf|[$base_digits]+)$/;
+  die "max ($max) must be a base $opts->{base} integer or /^[+-]?inf\$/"  if  $max !~ /^[-+]?(?:inf|[$base_digits]+)$/;
+
+  # convert '-inf' / '+inf' strings to neg_inf / pos_inf objects
+  # and canonicalize min and max by removing leading zeroes, plus signs
   foreach my $val ( \$min, \$max ) {
-    $$val = pos_inf  if  !ref $$val && $$val =~ /^[+]?inf$/;
-    $$val = neg_inf  if  !ref $$val && $$val =~ /^-inf$/;
+    next  if  ref $$val; # don't do these checks on pos_inf/neg_inf objects
+    $$val =~ s/^\+//;
+    $$val =~ s/^(-?)0+/$1/; #strip leading zeroes
+    $$val = 0        if  $$val =~ /^-?$/; #don't strip "0" or "-0" -> ""
+    $$val = pos_inf  if  $$val =~ /^[+]?inf$/;
+    $$val = neg_inf  if  $$val =~ /^-inf$/;
   }
 
-  if( $min > $max ) {
-    if($opts->{autoswap}) {
-      ($min, $max) = ($max, $min);
-    } else {
-      die "min > max (autoswap option not specified";
-    }
+  # any infinite numbers are compared using Util::inf, but others
+  # must be compared as strings to account for bases >10
+  # TODO: this assumes we have a base in ascii-order!
+  my $out_of_order;
+  if(inf_type($min) || inf_type($max)) {
+    $out_of_order = $min > $max;
+  } elsif( !_is_negative($min) && _is_negative($max) ) {
+    $out_of_order = 1;
+  } elsif( _is_negative($min) && !_is_negative($max) ) {
+    $out_of_order = 0;
+  } else { #min and max have same sign
+    my $digdiff = length($max)-length($min);
+    my $pmin = $digdiff > 0 ? _pad($min, $digdiff)  : $min;
+    my $pmax = $digdiff < 0 ? _pad($max, -$digdiff) : $max;
+    $out_of_order = _is_negative($max) ? $pmin lt $pmax : $pmin gt $pmax;
   }
-  return bless { min => $min, max => $max, opts => $opts }, $class; 
+
+  if( $out_of_order ) {
+    die "min($min) > max($max) (autoswap option not specified)"  if  !$opts->{autoswap};
+    ($min, $max) = ($max, $min);
+  }
+
+  return bless { min => $min, max => $max, opts => $opts,
+                 base => $base, base_max => $base_max,
+                 base_digits => $base_digits, base_digits_regex => $base_digits_regex,
+               }, $class;
 }
 
 sub to_string {
   my ($self, $passed_opts) = @_;
-  if( $self->{min} == $self->{max} ) {
+  if( $self->{min} eq $self->{max} ) {
     return $self->{min};
   # the prefer_comma option is dangerous because if you read in 3,4
   # you don't get 3..4, but instead 3..3,4..4 which requires collapsing
   #} elsif($self->{min}+$opts->{prefer_comma} >= $self->{max}) {
-  } elsif( $self->{min} > $self->{max} ) {
-    return join ',', ($self->{min}..$self->{max});
   } else {
     return "$self->{min}..$self->{max}";
   }
@@ -65,11 +92,11 @@ sub regex {
 
   my $opts = option_mangler( $self->{opts}, $passed_opts );
 
-  $self->{tranges} ||= [ $self->_calculate_tranges( $opts ) ];
+  $self->{tranges} ||= [ $self->_calculate_tranges() ];
 
-  my $separator      = $opts->{readable} ? ' | ' : '|';
+  my $separator = $opts->{readable} ? ' | ' : '|';
   my $regex_str = join $separator, map { $_->regex( $opts ) } @{$self->{tranges}};
-  $regex_str = " $regex_str "  if  $opts->{readable};
+  $regex_str    = " $regex_str "  if  $opts->{readable};
 
   my $modifier_maybe = $opts->{readable} ? '(?x)' : '';
   my ($begin_comment_maybe, $end_comment_maybe) = ('', '');
@@ -81,77 +108,52 @@ sub regex {
   }
   $regex_str = "(?:$regex_str)"  if  @{$self->{tranges}} != 1;
 
-  return qr/$begin_comment_maybe$modifier_maybe$regex_str$end_comment_maybe/; 
+  return qr/$begin_comment_maybe$modifier_maybe$regex_str$end_comment_maybe/;
 }
 
 sub _calculate_tranges {
-  my ($self, $opts) = @_; 
+  my ($self) = @_;
   my $min = $self->{min};
   my $max = $self->{max};
 
-  #canonicalize min and max by removing leading zeroes unless the value is 0
-  if(!ref $min) { $min =~ s/^0+//; $min = 0 if $min eq ''; }
-  if(!ref $max) { $max =~ s/^0+//; $max = 0 if $max eq ''; }
-
-  if( $min < 0 && $max < 0 ) {
+  if( _is_negative( $min ) && _is_negative( $max ) ) {
     my $pos_sr = __PACKAGE__->new( -$max, -$min );
-    my @tranges = $pos_sr->_calculate_tranges( $opts );
+    my @tranges = $pos_sr->_calculate_tranges();
     @tranges = reverse map { Number::Range::Regex::TrivialRange->new(
-                         -$_->{max}, -$_->{min}, $self->{opts} ) } @tranges;
+                         -$_->{max}, -$_->{min} ) } @tranges;
     return @tranges;
-  } elsif( $min < 0 && $max >= 0 ) {
+  } elsif( _is_negative( $min ) && !_is_negative( $max ) ) {
     # min..-1, 0..max
     my $pos_lo_sr = __PACKAGE__->new( 1, -$min );
-    my @tranges = $pos_lo_sr->_calculate_tranges( $opts );
+    my @tranges = $pos_lo_sr->_calculate_tranges();
     @tranges = reverse map { Number::Range::Regex::TrivialRange->new(
-                         -$_->{max}, -$_->{min}, $self->{opts} ) } @tranges;
-    push @tranges, __PACKAGE__->new( 0, $max )->_calculate_tranges( $opts );
+                         -$_->{max}, -$_->{min}, ) } @tranges;
+    push @tranges, __PACKAGE__->new( 0, $max )->_calculate_tranges();
     return @tranges;
-  } elsif( $min >= 0 && $max < 0 ) {
+  } elsif( !_is_negative( $min ) && _is_negative( $max ) ) {
     die "_calculate_tranges() - internal error - min($min)>=0 but max($max)<0?";
   }
   # if we get here, $min >= 0 and $max >= 0
 
-  if ( $min == $max ) {
-    return Number::Range::Regex::TrivialRange->new( $min, $min, $self->{opts} );
+  if ( $min eq $max ) {
+    return Number::Range::Regex::TrivialRange->new( $min, $min );
   }
 
-  if($min == neg_inf) {
-die "we never get here?";
-#      if($self->{max} < 0) {
-#        # iterate from $self->{max} down to the next (power of 10) - 1 (e.g. -9999)
-#        # then spit out a regex for any negative integer with a longer length
-#        my $min_digits = length($self->{max})-1;
-#        my $tmp = '-'.('9' x $min_digits);
-#        my $noninf = __PACKAGE__->new($tmp, $self->{max});
-#        return ( Number::Range::Regex::TrivialRange->new( neg_inf, $tmp-1, $self->{opts} ),
-#                 $noninf->_calculate_tranges( $opts ) );
-#      } else {
-#        my $noninf = __PACKAGE__->new(0, $self->{max});
-#        return ( Number::Range::Regex::TrivialRange->new( neg_inf, -1, $self->{opts} ),
-#                 $noninf->_calculate_tranges( $opts ) );
-#      }
-  } elsif($max == pos_inf) {
-    if($self->{min} < 0) {
-      my $noninf = __PACKAGE__->new($self->{min}, -1);
-      return ( $noninf->_calculate_tranges( $opts ),
-               Number::Range::Regex::TrivialRange->new( 0, pos_inf, $self->{opts} ) );
-    } else {
-      # iterate from $self->{min} up to the next (power of 10) - 1 (e.g. 9999)
-      # then spit out a regex for any integer with a longer length
-      my $tmp = '9' x length $self->{min};
-      my $noninf = __PACKAGE__->new($self->{min}, $tmp);
-      return ( $noninf->_calculate_tranges( $opts ),
-               Number::Range::Regex::TrivialRange->new( $tmp+1, pos_inf, $self->{opts} ) );
-    }
+  if($max == pos_inf) {
+    # iterate from $self->{min} up to the next (power of 10) - 1 (e.g. 9999)
+    # then spit out a regex for any integer with a longer length
+    my $tmp = $self->{base_max} x length $self->{min};
+    my $noninf = __PACKAGE__->new($self->{min}, $tmp );
+    return ( $noninf->_calculate_tranges(),
+             Number::Range::Regex::TrivialRange->new( $tmp+1, pos_inf ) );
   } else {
 
-#    $min-- unless $opts->{exclusive_min} || $opts->{exclusive};
-#    $max++ unless $opts->{exclusive_max} || $opts->{exclusive};
-#    warn "WARNING: exclusive ranges untested!" if($opts->{exclusive_min} || $opts->{exclusive_max} || $opts->{exclusive});
+#    $min-- unless $self->{opts}->{exclusive_min} || $self->{opts}->{exclusive};
+#    $max++ unless $self->{opts}->{exclusive_max} || $self->{opts}->{exclusive};
+#    warn "WARNING: exclusive ranges untested!" if($self->{opts}->{exclusive_min} || $self->{opts}->{exclusive_max} || $self->{opts}->{exclusive});
 
-    my $ndigits = length $max;
-    my $padded_min = sprintf "%0${ndigits}d", $min;
+    my $digits_diff = length($max)-length($min);
+    my $padded_min = ('0' x $digits_diff).$min;
 
     my $samedigits = 0;
     for my $digit (0..length($max)-1) {
@@ -162,29 +164,37 @@ die "we never get here?";
     my ($rightmost, $leftmost) = (length $max, $samedigits+1);
 
     my @tranges = ();
-    push @tranges, 
+    push @tranges,
       $self->_do_range_setting_loop($min, $padded_min, length($max) - length($min), $rightmost,
-        [ reverse ($leftmost..$rightmost) ],
+        [ reverse ($leftmost+1..$rightmost) ],
         sub {
           my ( $digit, $trailer_len, $header ) = @_;
-          my $digit_min = $trailer_len ? $digit+1 : $digit; #inclusive in ones column only!
-          my $digit_max = $max - ($header.('0'x($trailer_len+1)));
-          $digit_max = substr($digit_max, 0, length($digit_max)-$trailer_len);
-          $digit_max-- if $trailer_len; # inclusive only when this is the last
-          $digit_max = 9 if $digit_max > 9;
+          return ($trailer_len ? base_next($digit, $self->{base_digits}) : $digit, $self->{base_max});
+        }
+      );
+
+    push @tranges,
+      $self->_do_range_setting_loop($min, $padded_min, length($max) - length($min), $rightmost,
+        [ $leftmost ],
+        sub {
+          my ( $digit, $trailer_len, $header ) = @_;
+          my $digit_min = $trailer_len ? base_next($digit, $self->{base_digits}) : $digit; #inclusive in ones column only!
+          my $digit_max = substr($max, length($header), 1);
+          $digit_max = base_prev($digit_max, $self->{base_digits})  if  $trailer_len;
           return ($digit_min, $digit_max);
         }
       );
 
-    push @tranges, 
+    push @tranges,
       $self->_do_range_setting_loop($max, $max, 0, $rightmost,
         [ ($leftmost+1)..$rightmost ],
         sub {
           my ( $digit, $trailer_len, $header ) = @_;
-          return (0, $trailer_len ? $digit-1 : $digit);
+          return (0, $trailer_len ? base_prev($digit, $self->{base_digits}) : $digit);
         }
       );
-    return @tranges; 
+
+    return @tranges;
   }
 }
 
@@ -198,65 +208,71 @@ sub _do_range_setting_loop {
     my $static_header = $pos < 0 ? "" : substr($string_base, 0, $pos);
     my $trailer_len = $rightmost - $digit_pos;
 
-    my $digit   = substr($padded_string_base, $digit_pos-1, 1);
+    my $digit = substr($padded_string_base, $digit_pos-1, 1);
 
     my ($digit_min, $digit_max) = $digit_range_sub->( $digit, $trailer_len, $static_header );
 
-    my $digit_range = ($digit_max < $digit_min)  ? next :
-                      ($digit_max == $digit_min) ? $digit_min :
-                      "[$digit_min-$digit_max]";
+    my $digit_range = _calculate_digit_range( $digit_min, $digit_max, $self->{base_digits} );
+    next  unless  defined $digit_range;
 
     my $range_min = $static_header.$digit_min.(0 x $trailer_len);
-    my $range_max = $static_header.$digit_max.(9 x $trailer_len);
+    my $range_max = $static_header.$digit_max.($self->{base_max} x $trailer_len);
     push @ranges, Number::Range::Regex::TrivialRange->new(
-                    $range_min, $range_max, $self->{opts} );
+                      $range_min, $range_max );
   }
-  return @ranges; 
+  return @ranges;
 }
 
 sub intersection {
   my ($self, $other) = @_;
 
   if( $other->isa('Number::Range::Regex::CompoundRange') ) {
-    return Number::Range::Regex::CompoundRange->new( $self, $self->{opts} )->intersection( $other );
-  } elsif( $other->is_infinite ) {
-    return $other->intersection( $self );
+    return Number::Range::Regex::CompoundRange->new( $self )->intersection( $other );
   }
-  my ($lower, $upper) = _sort_by_min( $self, $other );
+  my ($lower, $upper) = _order_by_min( $self, $other );
   if( $upper->{min} <= $lower->{max} ) {
     return $upper  if  $upper->{max} <= $lower->{max};
     return __PACKAGE__->new( $upper->{min}, $lower->{max} );
   } else {
-    return Number::Range::Regex::EmptyRange->new( $self->{opts} );
+    return empty_set();
   }
 }
 
 sub union {
+  my $opts = option_mangler( ref $_[-1] eq 'HASH' ? pop : undef );
   my ($self, @other) = @_;
-  return multi_union( $self, @other, $self->{opts} )  if  @other > 1;
+#warn "sr::u, wo: $opts->{warn_overlap}, $self, @other";
+  return multi_union( $self, @other )  if  @other > 1;
   my $other = shift @other;
   if( $other->isa('Number::Range::Regex::CompoundRange') ) {
-    return Number::Range::Regex::CompoundRange->new( $self, $self->{opts} )->union( $other);
-  } elsif( $other->isa('Number::Range::Regex::EmptyRange') ) {
-    return $self;
-#  } elsif( $other->is_infinite ) {
-#    return $other->union( $self );
+    return Number::Range::Regex::CompoundRange->new( $self )->union( $other );
   }
-  my ($lower, $upper) = _sort_by_min( $self, $other );
-  if( $upper->{min} <= $lower->{max}+1 ) {
-    return $lower  if  $lower->{max} >= $upper->{max};
-    return __PACKAGE__->new( $lower->{min}, max( $lower->{max}, $upper->{max} ), $self->{opts} );
-  } else {
-    return Number::Range::Regex::CompoundRange->new( $lower, $upper, $self->{opts} );
+  my ($lower, $upper) = _order_by_min( $self, $other );
+  if( $upper->{min} < $lower->{max}+1 ) {
+    if( $opts->{warn_overlap} ) {
+      my $overlap = __PACKAGE__->new( $upper->{min}, $lower->{max} );
+      my $subname = $opts->{warn_overlap} eq '1' ? 'union' : $opts->{warn_overlap};
+      warn "$subname call got overlap: ".$overlap->to_string();
+    }
+    # NOTE: this is more complicated than it probably should be: we preserve
+    # the original object if we can, so if it's a TR, it stays a TR.
+    # we don't actually seem to need that, although we have tests for it.
+    if( $lower->{max} >= $upper->{max} ) {
+      return $lower;
+    } else {
+      return __PACKAGE__->new( $lower->{min}, $upper->{max} );
+    }
+  } elsif( $upper->{min} == $lower->{max}+1 ) {
+    return __PACKAGE__->new( $lower->{min}, $upper->{max} );
+  } else { #$upper->{min} > $lower->{max}+1
+    return Number::Range::Regex::CompoundRange->new( $lower, $upper );
   }
 }
 
 sub subtract {
   my ($self, $other) = @_;
   if( $other->isa('Number::Range::Regex::CompoundRange') ) {
-    return Number::Range::Regex::CompoundRange->new( $self, $self->{opts} )->subtract( $other);
-  } elsif( $other->is_infinite ) {
-    return $other->subtract( $self );
+    return Number::Range::Regex::CompoundRange->new( $self )->subtract( $other);
   }
   return $self  unless  $self->touches($other);
 
@@ -275,7 +291,7 @@ sub subtract {
     if( $self->{max} <= $other->{max} ) {
       # e.g. (1..7)-(1..11) = ()
       # e.g. (1..7)-(1..7) = ()
-      return Number::Range::Regex::EmptyRange->new();
+      return empty_set();
     } else {
       # e.g. (1..7)-(1..4) = (5..7)
       return __PACKAGE__->new( $other->{max}+1, $self->{max} );
@@ -286,9 +302,7 @@ sub subtract {
 sub xor {
   my ($self, $other) = @_;
   if( $other->isa('Number::Range::Regex::CompoundRange') ) {
-    return Number::Range::Regex::CompoundRange->new( $self, $self->{opts} )->xor( $other );
-  } elsif( $other->is_infinite ) {
-    return $other->xor( $self );
+    return Number::Range::Regex::CompoundRange->new( $self )->xor( $other );
   }
   return $self->union($other)  unless  $self->touches($other);
 
@@ -298,13 +312,13 @@ sub xor {
       return __PACKAGE__->new( $self->{max}+1, $other->{max} );
     } elsif($self->{max} == $other->{max}) {
       # e.g. (1..11)xor(1..11) = ()
-      return Number::Range::Regex::EmptyRange->new();
+      return empty_set( $self->{opts} );
     } else {
       # e.g. (1..7)xor(1..6) = (7)
       return __PACKAGE__->new( $other->{max}+1, $self->{max} );
     }
   } else {
-    my ($lower, $upper) = _sort_by_min( $self, $other );
+    my ($lower, $upper) = _order_by_min( $self, $other );
     if($lower->{max} < $upper->{max}) {
       # e.g. (1..7)xor(3..11) = (1..2, 8..11)
       my $r1 = __PACKAGE__->new( $lower->{min}, $upper->{min}-1 );
@@ -312,8 +326,7 @@ sub xor {
       return $r1->union( $r2 );
     } elsif($lower->{max} == $upper->{max}) {
       # e.g. (1..11)xor(3..11) = (1..2)
-      return __PACKAGE__->new(
-                 $lower->{min}, $upper->{min}-1 );
+      return __PACKAGE__->new( $lower->{min}, $upper->{min}-1 );
     } else {
       # e.g. (1..7)xor(3..6) = (1..2, 7)
       my $r1 = __PACKAGE__->new( $lower->{min}, $upper->{min}-1 );
@@ -332,7 +345,7 @@ sub invert {
   if($self->{max} != pos_inf) {
     push @r, __PACKAGE__->new( $self->{max}+1, pos_inf );
   }
-  return multi_union( @r, $self->{opts} );
+  return multi_union( @r );
 }
 
 sub overlaps {
@@ -342,7 +355,7 @@ sub overlaps {
       return 1  if  $other->overlaps($self);
     } else {
       die "other argument is not a simple range (try swapping your args)"  unless  $other->isa('Number::Range::Regex::SimpleRange');
-      my ($lower, $upper) = _sort_by_min( $self, $other );
+      my ($lower, $upper) = _order_by_min( $self, $other );
       return 1  if  $upper->{min} <= $lower->{max};
     }
   }
@@ -356,7 +369,7 @@ sub touches {
       return 1  if  $other->touches($self);
     } else {
       die "other argument is not a simple range (try swapping your args)"  unless  $other->isa('Number::Range::Regex::SimpleRange');
-      my ($lower, $upper) = _sort_by_min( $self, $other );
+      my ($lower, $upper) = _order_by_min( $self, $other );
       return 1  if  $upper->{min} <= $lower->{max}+1;
     }
   }
@@ -375,6 +388,8 @@ sub is_infinite {
   my ($self) = @_;
   return !( $self->has_lower_bound && $self->has_upper_bound );
 }
+
+sub is_empty { return; }
 
 1;
 
